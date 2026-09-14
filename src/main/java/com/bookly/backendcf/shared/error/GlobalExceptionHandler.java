@@ -4,7 +4,6 @@ import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
 import com.bookly.backendcf.auth.application.AccountLockedException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
 import com.bookly.backendcf.organization.application.OrganizationAlreadyExistsException;
-import com.bookly.backendcf.organization.application.OrganizationNotFoundException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,23 +41,13 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(OrganizationAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleDuplicateOrganization(
+    public ResponseEntity<ApiErrorResponse> handleOrganizationAlreadyExists(
             OrganizationAlreadyExistsException exception) {
         return buildResponse(
                 HttpStatus.CONFLICT,
                 "ORGANIZATION_ALREADY_EXISTS",
                 exception.getMessage(),
-                Map.of(exception.getField(), exception.getDetail()));
-    }
-
-    @ExceptionHandler(OrganizationNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleOrganizationNotFound(
-            OrganizationNotFoundException exception) {
-        return buildResponse(
-                HttpStatus.NOT_FOUND,
-                "ORGANIZATION_NOT_FOUND",
-                exception.getMessage(),
-                Map.of("organizationId", String.valueOf(exception.getOrganizationId())));
+                Map.of("organization", "El aprovisionamiento solo puede realizarse una vez"));
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)

@@ -123,8 +123,7 @@ El modelo físico lo aplica **Flyway** al arrancar, desde `src/main/resources/db
 
 - `V1__baseline_app_user.sql`: creación inicial de `app_user`.
 - `V2__add_login_security.sql`: columnas de bloqueo de cuenta y CHECK de roles (antes `002-add-login-security.sql`).
-- `V3__create_organization.sql`: tabla `organization` (tenant).
-- `V4__add_tenant_to_app_user.sql`: `tenant_id` en `app_user` y unicidad de correo por organización.
+- `V3__create_organization.sql`: tabla `organization`, limitada a una sola fila.
 
 DDL equivalente para una base nueva:
 

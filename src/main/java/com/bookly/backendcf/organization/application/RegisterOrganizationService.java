@@ -31,26 +31,22 @@ public class RegisterOrganizationService {
     }
 
     /**
-     * Crea la organización y su administrador en una sola transacción: si falla cualquiera de las
-     * dos escrituras, no queda nada a medias.
+     * Aprovisiona la organización y su administrador en una sola transacción: si falla cualquiera de
+     * las dos escrituras, no queda nada a medias.
+     *
+     * <p>Solo puede ejecutarse una vez. La base lo garantiza además con un índice único sobre una
+     * expresión constante, de modo que dos peticiones simultáneas no puedan colarse ambas.
      */
     @Transactional
     public RegisterOrganizationResponse register(RegisterOrganizationRequest request) {
-        String name = normalizeName(request.name());
-        String taxId = request.taxId().trim();
-
-        if (organizationRepository.existsByNameIgnoreCase(name)) {
-            throw OrganizationAlreadyExistsException.forName(name);
+        if (organizationRepository.count() > 0) {
+            throw new OrganizationAlreadyExistsException();
         }
 
-        if (organizationRepository.existsByTaxId(taxId)) {
-            throw OrganizationAlreadyExistsException.forTaxId(taxId);
-        }
-
-        Organization organization = organizationRepository.save(new Organization(name, taxId));
+        Organization organization = organizationRepository.save(
+                new Organization(normalizeName(request.name()), request.taxId().trim()));
 
         UserAccount adminUser = userAccountRepository.save(new UserAccount(
-                organization.getId(),
                 normalizeEmail(request.adminEmail()),
                 passwordEncoder.encode(request.adminPassword()),
                 normalizeFullName(request.adminFullName()),

@@ -12,3 +12,8 @@ CREATE TABLE organization (
 -- Unicidad de razon social insensible a mayusculas. El servicio normaliza ademas
 -- los espacios antes de persistir, de modo que el indice compara valores ya limpios.
 CREATE UNIQUE INDEX uk_organization_name ON organization (lower(name));
+
+-- La plataforma atiende a una sola organizacion. El indice sobre una expresion constante
+-- permite exactamente una fila, de modo que la invariante la sostiene la base y no solo la
+-- aplicacion: dos peticiones simultaneas no pueden colarse ambas.
+CREATE UNIQUE INDEX uk_organization_singleton ON organization ((true));

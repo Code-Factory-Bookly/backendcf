@@ -5,13 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
-import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.LoginRequest;
 import com.bookly.backendcf.auth.presentation.dto.LoginResponse;
 import com.bookly.backendcf.auth.security.JwtTokenService;
 import java.util.Optional;
-import java.util.UUID;
 import java.lang.reflect.Proxy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +22,7 @@ class LoginServiceTest {
 
     @BeforeEach
     void setUp() {
-        account = new UserAccount(UUID.randomUUID(), "patient@example.com",
-                new BCryptPasswordEncoder().encode("Valid1!pass"), "Patient One", UserRole.PATIENT);
+        account = new UserAccount("patient@example.com", new BCryptPasswordEncoder().encode("Valid1!pass"), "Patient One");
         repository = (UserAccountRepository) Proxy.newProxyInstance(
                 UserAccountRepository.class.getClassLoader(),
                 new Class<?>[]{UserAccountRepository.class},

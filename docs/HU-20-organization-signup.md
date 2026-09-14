@@ -55,6 +55,12 @@ Todos los errores usan el envoltorio uniforme ya existente: `errorCode`, `messag
 
 ## Migraciones (Flyway, nuevo en el proyecto)
 
+> **Trampa de Spring Boot 4:** añadir `flyway-core` **no basta**. Boot 4 sacó las autoconfiguraciones
+> a módulos propios, así que `FlywayAutoConfiguration` vive en `org.springframework.boot:spring-boot-flyway`.
+> Sin esa dependencia, Flyway queda en el classpath pero nunca se ejecuta, y el arranque falla con
+> `Schema validation: missing table [app_user]` sin mencionar a Flyway por ningún lado. El `pom.xml`
+> ya incluye las tres dependencias.
+
 Antes el esquema vivía en `docker/postgres/init/001-create-app-user.sql`, que Postgres solo ejecuta
 al crear el volumen por primera vez y que no aplica en un entorno administrado como Render. **Ese
 script se eliminó** junto con su montaje en `docker-compose.yml`: ahora el esquema lo gobierna
@@ -96,6 +102,13 @@ fuera de una organización: es la consecuencia directa de volver la plataforma m
   documento de contexto rechaza por NIT repetido; se implementan los dos, bajo un único
   `errorCode: ORGANIZATION_ALREADY_EXISTS`, y `details` dice cuál de los dos campos chocó. El nombre
   se normaliza (espacios colapsados) antes de comparar, y la comparación ignora mayúsculas.
+
+  **Depende de la colación de la base.** Tanto `existsByNameIgnoreCase` como el índice único sobre
+  `lower(name)` usan el plegado de mayúsculas de PostgreSQL, que solo cubre ASCII si el clúster se
+  creó con `LC_CTYPE=C`. En ese caso `Odontológica` y `ODONTOLÓGICA` se consideran **distintas** y la
+  regla de unicidad se debilita en silencio. Verificado: con proveedor ICU (`es-CO`) el plegado es
+  correcto. La base de despliegue debe usar una colación UTF-8 o ICU, no `C`. La regla es
+  insensible a mayúsculas pero **no** a tildes: `Clinica` y `Clínica` son razones sociales distintas.
 - **Correo de bienvenida como puerto con adaptador de log.** `WelcomeNotificationPort` es la
   interfaz; `LoggingWelcomeNotificationAdapter` deja constancia en el log. No se añadió
   `spring-boot-starter-mail` ni configuración SMTP, así que no hay secretos que gestionar. Cuando
@@ -156,6 +169,23 @@ SELECT email, role, tenant_id, password_hash FROM app_user;
 ```
 
 Y que el log muestra la línea de bienvenida **sin** la contraseña.
+
+### Verificación ya ejecutada
+
+Contra un PostgreSQL 16.10 real (colación ICU `es-CO`), no contra H2:
+
+| Comprobación | Resultado |
+|---|---|
+| `mvnw clean test` | BUILD SUCCESS, 4 pruebas, 0 fallos |
+| Flyway V1→V4 desde base vacía | `Successfully applied 4 migrations, now at version v4` |
+| Arranque con `ddl-auto=validate` | Correcto: el esquema cuadra con las entidades |
+| Registro de organización | `201` con `organizationId`, `name` y `adminUserId` |
+| Razón social repetida (solo cambian mayúsculas y espacios) | `409 ORGANIZATION_ALREADY_EXISTS`, `details.name` |
+| NIT repetido con otra razón social | `409 ORGANIZATION_ALREADY_EXISTS`, `details.taxId` |
+| Petición sin `taxId` | `400 VALIDATION_ERROR` con `errorCode`, `message`, `details` y `traceId` |
+| `/auth/register` con organización válida / inexistente | `201` / `404 ORGANIZATION_NOT_FOUND` |
+| Contraseña en base | Hash BCrypt `$2a$10$`, nunca en claro, ausente de la respuesta |
+| Restricciones creadas | `uk_app_user_tenant_email`, `fk_app_user_organization`, `uk_organization_name` sobre `lower(name)` |
 
 ---
 

@@ -1,0 +1,8 @@
+ALTER TABLE app_user
+    ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+
+ALTER TABLE app_user DROP CONSTRAINT IF EXISTS ck_app_user_role;
+ALTER TABLE app_user
+    ADD CONSTRAINT ck_app_user_role
+    CHECK (role IN ('PATIENT', 'PROFESSIONAL', 'ADMIN'));

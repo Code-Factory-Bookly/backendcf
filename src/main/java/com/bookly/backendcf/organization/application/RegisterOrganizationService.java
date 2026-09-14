@@ -54,7 +54,7 @@ public class RegisterOrganizationService {
                 normalizeEmail(request.adminEmail()),
                 passwordEncoder.encode(request.adminPassword()),
                 normalizeFullName(request.adminFullName()),
-                UserRole.ORG_ADMIN));
+                UserRole.ADMIN));
 
         welcomeNotificationPort.sendOrganizationWelcome(
                 organization.getId(),

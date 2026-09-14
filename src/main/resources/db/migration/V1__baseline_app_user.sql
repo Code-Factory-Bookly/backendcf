@@ -1,3 +1,5 @@
+-- Linea base: el esquema tal como existia antes de adoptar Flyway.
+-- En bases ya creadas no se reaplica, gracias a spring.flyway.baseline-on-migrate=true.
 CREATE TABLE IF NOT EXISTS app_user (
     id UUID NOT NULL,
     email VARCHAR(320) NOT NULL,

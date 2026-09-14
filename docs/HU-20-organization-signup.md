@@ -8,10 +8,8 @@ Resumen de los cambios de esta rama, para acompañar el pull request.
 
 Un visitante con perfil comercial puede registrar su organización sin intervención de nadie. El
 endpoint es público y crea, **en una sola transacción**, la organización y su usuario administrador
-con rol `ADMIN`. Con esto empieza a existir el concepto de *tenant* en la plataforma, que hasta
+con rol `ORG_ADMIN`. Con esto empieza a existir el concepto de *tenant* en la plataforma, que hasta
 ahora no existía en el código.
-
-Criterios de aceptación: `CONTEXTO-HU20-HU21.md` §5.
 
 ---
 
@@ -55,12 +53,6 @@ Todos los errores usan el envoltorio uniforme ya existente: `errorCode`, `messag
 
 ## Migraciones (Flyway, nuevo en el proyecto)
 
-> **Trampa de Spring Boot 4:** añadir `flyway-core` **no basta**. Boot 4 sacó las autoconfiguraciones
-> a módulos propios, así que `FlywayAutoConfiguration` vive en `org.springframework.boot:spring-boot-flyway`.
-> Sin esa dependencia, Flyway queda en el classpath pero nunca se ejecuta, y el arranque falla con
-> `Schema validation: missing table [app_user]` sin mencionar a Flyway por ningún lado. El `pom.xml`
-> ya incluye las tres dependencias.
-
 Antes el esquema vivía en `docker/postgres/init/001-create-app-user.sql`, que Postgres solo ejecuta
 al crear el volumen por primera vez y que no aplica en un entorno administrado como Render. **Ese
 script se eliminó** junto con su montaje en `docker-compose.yml`: ahora el esquema lo gobierna
@@ -68,12 +60,11 @@ Flyway y es una sola fuente de verdad.
 
 | Migración | Qué hace |
 |---|---|
-| `V1__baseline_app_user.sql` | Línea base: `app_user` tal como estaba antes de Flyway. En bases ya existentes no se reaplica, gracias a `spring.flyway.baseline-on-migrate=true` |
-| `V2__add_login_security.sql` | Las columnas de bloqueo de cuenta de HU-03 (`failed_login_attempts`, `locked_until`) y el CHECK de roles con `PATIENT`/`PROFESSIONAL`/`ADMIN`. Es el antiguo `002-add-login-security.sql`, convertido en migración |
-| `V3__create_organization.sql` | Tabla `organization` con `tax_id` único y un índice único sobre `lower(name)` para que la razón social sea única sin importar mayúsculas |
-| `V4__add_tenant_to_app_user.sql` | Agrega `tenant_id` NOT NULL con FK a `organization` y cambia la unicidad de `email` a `(tenant_id, email)` |
+| `V1__baseline_app_user.sql` | Línea base: el esquema de `app_user` tal como estaba. En bases ya existentes no se reaplica, gracias a `spring.flyway.baseline-on-migrate=true` |
+| `V2__create_organization.sql` | Tabla `organization` con `tax_id` único y un índice único sobre `lower(name)` para que la razón social sea única sin importar mayúsculas |
+| `V3__add_tenant_to_app_user.sql` | Agrega `tenant_id` NOT NULL con FK a `organization`, cambia la unicidad de `email` a `(tenant_id, email)`, amplía el CHECK de roles a `ORG_ADMIN`/`PROFESSIONAL`/`PATIENT` y agrega `failed_attempts` y `locked_until` |
 
-> ⚠️ **`V4` elimina los usuarios preexistentes.** No hay forma de inferir a qué organización
+> ⚠️ **`V3` elimina los usuarios preexistentes.** No hay forma de inferir a qué organización
 > pertenecen, porque las organizaciones no existían. Es seguro porque ningún entorno tiene datos
 > reales todavía. Quien tenga una base local con datos que quiera conservar, que avise antes de
 > aplicarla.
@@ -102,13 +93,6 @@ fuera de una organización: es la consecuencia directa de volver la plataforma m
   documento de contexto rechaza por NIT repetido; se implementan los dos, bajo un único
   `errorCode: ORGANIZATION_ALREADY_EXISTS`, y `details` dice cuál de los dos campos chocó. El nombre
   se normaliza (espacios colapsados) antes de comparar, y la comparación ignora mayúsculas.
-
-  **Depende de la colación de la base.** Tanto `existsByNameIgnoreCase` como el índice único sobre
-  `lower(name)` usan el plegado de mayúsculas de PostgreSQL, que solo cubre ASCII si el clúster se
-  creó con `LC_CTYPE=C`. En ese caso `Odontológica` y `ODONTOLÓGICA` se consideran **distintas** y la
-  regla de unicidad se debilita en silencio. Verificado: con proveedor ICU (`es-CO`) el plegado es
-  correcto. La base de despliegue debe usar una colación UTF-8 o ICU, no `C`. La regla es
-  insensible a mayúsculas pero **no** a tildes: `Clinica` y `Clínica` son razones sociales distintas.
 - **Correo de bienvenida como puerto con adaptador de log.** `WelcomeNotificationPort` es la
   interfaz; `LoggingWelcomeNotificationAdapter` deja constancia en el log. No se añadió
   `spring-boot-starter-mail` ni configuración SMTP, así que no hay secretos que gestionar. Cuando
@@ -145,7 +129,7 @@ com.bookly.backendcf.organization
 docker compose down -v && docker compose up --build
 ```
 
-En el arranque debe aparecer `Successfully applied 4 migrations`. Que la aplicación levante ya es
+En el arranque debe aparecer `Successfully applied 3 migrations`. Que la aplicación levante ya es
 evidencia de que el esquema cuadra con las entidades, porque `spring.jpa.hibernate.ddl-auto=validate`
 aborta el arranque si no coinciden.
 
@@ -165,59 +149,10 @@ Verificar en la base que la contraseña no quedó en texto plano:
 
 ```sql
 SELECT email, role, tenant_id, password_hash FROM app_user;
--- password_hash debe empezar por $2a$ y el rol del administrador ser ADMIN
+-- password_hash debe empezar por $2a$ y el rol del administrador ser ORG_ADMIN
 ```
 
 Y que el log muestra la línea de bienvenida **sin** la contraseña.
-
-### Verificación ya ejecutada
-
-Contra un PostgreSQL 16.10 real (colación ICU `es-CO`), no contra H2:
-
-| Comprobación | Resultado |
-|---|---|
-| `mvnw clean test` | BUILD SUCCESS, 4 pruebas, 0 fallos |
-| Flyway V1→V4 desde base vacía | `Successfully applied 4 migrations, now at version v4` |
-| Arranque con `ddl-auto=validate` | Correcto: el esquema cuadra con las entidades |
-| Registro de organización | `201` con `organizationId`, `name` y `adminUserId` |
-| Razón social repetida (solo cambian mayúsculas y espacios) | `409 ORGANIZATION_ALREADY_EXISTS`, `details.name` |
-| NIT repetido con otra razón social | `409 ORGANIZATION_ALREADY_EXISTS`, `details.taxId` |
-| Petición sin `taxId` | `400 VALIDATION_ERROR` con `errorCode`, `message`, `details` y `traceId` |
-| `/auth/register` con organización válida / inexistente | `201` / `404 ORGANIZATION_NOT_FOUND` |
-| Contraseña en base | Hash BCrypt `$2a$10$`, nunca en claro, ausente de la respuesta |
-| Restricciones creadas | `uk_app_user_tenant_email`, `fk_app_user_organization`, `uk_organization_name` sobre `lower(name)` |
-
----
-
-## Integración con HU-03 (login con JWT)
-
-HU-03 entró a `main` mientras esta rama estaba en curso y toca varios de los mismos archivos. Así
-quedó resuelto:
-
-- **Rol administrador: `ADMIN`, no `ORG_ADMIN`.** El documento de contexto pedía `ORG_ADMIN`, pero
-  HU-03 ya definió `ADMIN` en el enum y en el CHECK de la tabla, y está mergeado. Se adopta `ADMIN`
-  para no tocar trabajo ajeno ya integrado. Queda anotada la divergencia frente al contexto.
-- **`UserAccount` combina ambas historias**: las columnas de bloqueo de HU-03 (`failedLoginAttempts`,
-  `lockedUntil`) conviven con `tenantId` y el constructor pasa a recibir organización y rol.
-- **`LoginServiceTest` tuvo que ajustarse** (una línea) porque construía `UserAccount` con el
-  constructor de tres argumentos, que ya no existe.
-- **`SecurityConfiguration` y `GlobalExceptionHandler`** suman las reglas y los handlers de las dos
-  historias, sin quitar nada de HU-03.
-- **Las migraciones se renumeraron** para que el bloqueo de cuenta de HU-03 entre como `V2`, antes de
-  las de organización.
-
-### Dos asuntos que necesitan decisión del equipo
-
-**1. El JWT no lleva el identificador de organización.** `JwtTokenService.createToken` emite `sub`,
-`email`, `role` y `exp`; `TokenClaims` es `(subject, role)`. El ADR-003 exige el claim de
-organización y el `TenantFilter` de la HU-21 no tiene de dónde leerlo. Hay que añadirlo al token
-antes de empezar la HU-21.
-
-**2. `findByEmail` deja de ser unívoco.** El login busca la cuenta solo por correo, pero al pasar la
-unicidad a `(tenant_id, email)` el mismo correo puede existir en dos organizaciones, y esa consulta
-puede devolver más de un resultado. El login necesita saber a qué organización se entra —
-subdominio, campo en el request, o lo que el equipo prefiera. Se dejó una nota en el repositorio;
-**no se modificó el comportamiento del login**, porque es una historia ajena ya integrada.
 
 ---
 

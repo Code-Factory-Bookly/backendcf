@@ -88,11 +88,14 @@ Después de modificar código Java o el `Dockerfile`:
 docker compose up -d --build app
 ```
 
-Los scripts de `docker/postgres/init` se ejecutan automáticamente solo cuando se crea la base por primera vez. Si el volumen ya existía, aplicar la migración de seguridad manualmente:
+El esquema lo gestiona **Flyway**, que aplica las migraciones de `src/main/resources/db/migration`
+al arrancar la aplicación. No hay que ejecutar SQL a mano ni recrear el volumen: sobre una base ya
+existente, Flyway la marca en la línea base y aplica solo lo pendiente.
+
+Para partir de cero:
 
 ```bash
-docker compose exec db psql -U backendcf -d backendcf \
-  -f /docker-entrypoint-initdb.d/002-add-login-security.sql
+docker compose down -v && docker compose up --build
 ```
 
 ## Ejecución local sin Docker

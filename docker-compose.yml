@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: backendcf-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-backendcf}
+      POSTGRES_USER: ${POSTGRES_USER:-backendcf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backendcf_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backendcf-app
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-backendcf}
+      DB_USERNAME: ${POSTGRES_USER:-backendcf}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-backendcf_dev_password}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

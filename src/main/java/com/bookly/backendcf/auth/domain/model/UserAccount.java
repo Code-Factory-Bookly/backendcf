@@ -8,18 +8,30 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "app_user")
+@Table(
+        name = "app_user",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_app_user_tenant_email",
+                columnNames = {"tenant_id", "email"}))
 public class UserAccount {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 320)
+    /**
+     * Organización a la que pertenece el usuario. Es la columna sobre la que operarán las políticas
+     * de Row-Level Security.
+     */
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(nullable = false, length = 320)
     private String email;
 
     @Column(name = "password_hash", nullable = false, length = 255)
@@ -44,11 +56,12 @@ public class UserAccount {
     protected UserAccount() {
     }
 
-    public UserAccount(String email, String passwordHash, String fullName) {
+    public UserAccount(UUID tenantId, String email, String passwordHash, String fullName, UserRole role) {
+        this.tenantId = tenantId;
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
-        this.role = UserRole.PATIENT;
+        this.role = role;
         this.enabled = true;
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = this.createdAt;
@@ -56,6 +69,10 @@ public class UserAccount {
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getTenantId() {
+        return tenantId;
     }
 
     public String getEmail() {

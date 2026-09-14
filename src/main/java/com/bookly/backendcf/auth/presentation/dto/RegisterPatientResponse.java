@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record RegisterPatientResponse(
         UUID id,
+        UUID organizationId,
         String email,
         String fullName,
         UserRole role,
@@ -15,6 +16,7 @@ public record RegisterPatientResponse(
     public static RegisterPatientResponse from(UserAccount userAccount) {
         return new RegisterPatientResponse(
                 userAccount.getId(),
+                userAccount.getTenantId(),
                 userAccount.getEmail(),
                 userAccount.getFullName(),
                 userAccount.getRole(),

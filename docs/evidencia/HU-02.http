@@ -1,0 +1,92 @@
+# Evidencia HU-02 · Perfil de la organización y catálogo de servicios
+# Requiere la extensión "REST Client" de VS Code: pulsa "Send Request" sobre cada bloque, EN ORDEN.
+# Antes de empezar: base recién creada y un usuario ADMIN (ver docs/HU-02-service-catalog.md).
+
+@baseUrl = http://localhost:8080/api/v1
+@token = {{login.response.body.accessToken}}
+
+### 0 · Iniciar sesión como ADMIN (el token se reutiliza en los bloques siguientes)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@clinicanorte.co",
+  "password": "Secreta123*"
+}
+
+### Escenario 1a · Configurar el perfil de la organización → espera 200
+PUT {{baseUrl}}/organization/profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "commercialName": "Clínica Norte",
+  "contactEmail": "contacto@clinicanorte.co",
+  "contactPhone": "+57 604 444 5566",
+  "address": "Calle 50 # 45-20, Medellín"
+}
+
+### Escenario 1b · Registrar una especialidad → espera 201
+# @name specialty
+POST {{baseUrl}}/specialties
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Ortodoncia",
+  "description": "Corrección de la posición de dientes y maxilares"
+}
+
+### Escenario 1c · Cargar un servicio en esa especialidad → espera 201
+POST {{baseUrl}}/services
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "specialtyId": "{{specialty.response.body.id}}",
+  "name": "Instalación de brackets",
+  "description": "Brackets metálicos convencionales",
+  "durationMinutes": 90,
+  "price": 1800000.00
+}
+
+### Escenario 1d · Un cliente SIN iniciar sesión consulta el perfil → espera 200
+GET {{baseUrl}}/organization/profile
+
+### Escenario 1e · Un cliente SIN iniciar sesión consulta el catálogo → espera 200
+GET {{baseUrl}}/services
+
+### Escenario 2a · Perfil con el nombre comercial en blanco → espera 400
+PUT {{baseUrl}}/organization/profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "commercialName": "",
+  "contactEmail": "contacto@clinicanorte.co",
+  "contactPhone": "+57 604 444 5566",
+  "address": "Calle 50 # 45-20, Medellín"
+}
+
+### Escenario 2b · Servicio sin sus datos obligatorios → espera 400
+POST {{baseUrl}}/services
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "specialtyId": "{{specialty.response.body.id}}",
+  "name": "",
+  "description": "Sin nombre, duración ni precio"
+}
+
+### Seguridad · Un visitante sin sesión intenta crear un servicio → debe rechazarse
+POST {{baseUrl}}/services
+Content-Type: application/json
+
+{
+  "specialtyId": "{{specialty.response.body.id}}",
+  "name": "Intento sin sesión",
+  "durationMinutes": 30,
+  "price": 50000
+}

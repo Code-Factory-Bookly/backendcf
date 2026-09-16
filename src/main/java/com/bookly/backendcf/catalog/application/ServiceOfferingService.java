@@ -1,9 +1,7 @@
 package com.bookly.backendcf.catalog.application;
 
 import com.bookly.backendcf.catalog.domain.model.ServiceOffering;
-import com.bookly.backendcf.catalog.domain.model.Specialty;
 import com.bookly.backendcf.catalog.infrastructure.persistence.ServiceOfferingRepository;
-import com.bookly.backendcf.catalog.infrastructure.persistence.SpecialtyRepository;
 import com.bookly.backendcf.catalog.presentation.dto.ServiceOfferingRequest;
 import com.bookly.backendcf.catalog.presentation.dto.ServiceOfferingResponse;
 import java.util.List;
@@ -15,20 +13,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class ServiceOfferingService {
 
     private final ServiceOfferingRepository serviceOfferingRepository;
-    private final SpecialtyRepository specialtyRepository;
 
-    public ServiceOfferingService(
-            ServiceOfferingRepository serviceOfferingRepository,
-            SpecialtyRepository specialtyRepository) {
+    public ServiceOfferingService(ServiceOfferingRepository serviceOfferingRepository) {
         this.serviceOfferingRepository = serviceOfferingRepository;
-        this.specialtyRepository = specialtyRepository;
     }
 
     @Transactional(readOnly = true)
-    public List<ServiceOfferingResponse> list(UUID specialtyId) {
-        List<ServiceOffering> offerings = specialtyId == null
+    public List<ServiceOfferingResponse> list(String category) {
+        List<ServiceOffering> offerings = (category == null || category.isBlank())
                 ? serviceOfferingRepository.findAllByOrderByNameAsc()
-                : serviceOfferingRepository.findAllBySpecialtyIdOrderByNameAsc(specialtyId);
+                : serviceOfferingRepository.findAllByCategoryIgnoreCaseOrderByNameAsc(category.trim());
 
         return offerings.stream()
                 .map(ServiceOfferingResponse::from)
@@ -40,19 +34,19 @@ public class ServiceOfferingService {
         return ServiceOfferingResponse.from(findOffering(id));
     }
 
+    /** El estado nace en ACTIVO: lo asigna el sistema, se ignora cualquier valor recibido al crear. */
     @Transactional
     public ServiceOfferingResponse create(ServiceOfferingRequest request) {
-        Specialty specialty = findSpecialty(request.specialtyId());
         String name = normalize(request.name());
 
-        if (serviceOfferingRepository.existsBySpecialtyIdAndNameIgnoreCase(specialty.getId(), name)) {
+        if (serviceOfferingRepository.existsByNameIgnoreCase(name)) {
             throw new ServiceOfferingAlreadyExistsException(name);
         }
 
         ServiceOffering offering = new ServiceOffering(
-                specialty,
                 name,
                 normalizeOptional(request.description()),
+                normalize(request.category()),
                 request.durationMinutes(),
                 request.price());
 
@@ -62,19 +56,19 @@ public class ServiceOfferingService {
     @Transactional
     public ServiceOfferingResponse update(UUID id, ServiceOfferingRequest request) {
         ServiceOffering offering = findOffering(id);
-        Specialty specialty = findSpecialty(request.specialtyId());
         String name = normalize(request.name());
 
-        if (serviceOfferingRepository.existsBySpecialtyIdAndNameIgnoreCaseAndIdNot(specialty.getId(), name, id)) {
+        if (serviceOfferingRepository.existsByNameIgnoreCaseAndIdNot(name, id)) {
             throw new ServiceOfferingAlreadyExistsException(name);
         }
 
         offering.update(
-                specialty,
                 name,
                 normalizeOptional(request.description()),
+                normalize(request.category()),
                 request.durationMinutes(),
-                request.price());
+                request.price(),
+                request.status());
 
         return ServiceOfferingResponse.from(offering);
     }
@@ -86,10 +80,6 @@ public class ServiceOfferingService {
 
     private ServiceOffering findOffering(UUID id) {
         return serviceOfferingRepository.findById(id).orElseThrow(() -> new ServiceOfferingNotFoundException(id));
-    }
-
-    private Specialty findSpecialty(UUID id) {
-        return specialtyRepository.findById(id).orElseThrow(() -> new SpecialtyNotFoundException(id));
     }
 
     private String normalize(String value) {

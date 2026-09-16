@@ -1,4 +1,4 @@
-# Evidencia HU-02 · Perfil de la organización y catálogo de servicios
+# Evidencia HU-02 · Catálogo de servicios
 # Requiere la extensión "REST Client" de VS Code: pulsa "Send Request" sobre cada bloque, EN ORDEN.
 # Antes de empezar: base recién creada y un usuario ADMIN (ver docs/HU-02-service-catalog.md).
 
@@ -15,78 +15,98 @@ Content-Type: application/json
   "password": "Secreta123*"
 }
 
-### Escenario 1a · Configurar el perfil de la organización → espera 200
-PUT {{baseUrl}}/organization/profile
+### Escenario 1 (Arquitectura-BD) · Registro exitoso → 201, estado ACTIVO asignado por el sistema
+# @name created
+POST {{baseUrl}}/servicios
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "commercialName": "Clínica Norte",
-  "contactEmail": "contacto@clinicanorte.co",
-  "contactPhone": "+57 604 444 5566",
-  "address": "Calle 50 # 45-20, Medellín"
-}
-
-### Escenario 1b · Registrar una especialidad → espera 201
-# @name specialty
-POST {{baseUrl}}/specialties
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "name": "Ortodoncia",
-  "description": "Corrección de la posición de dientes y maxilares"
-}
-
-### Escenario 1c · Cargar un servicio en esa especialidad → espera 201
-POST {{baseUrl}}/services
-Authorization: Bearer {{token}}
-Content-Type: application/json
-
-{
-  "specialtyId": "{{specialty.response.body.id}}",
   "name": "Instalación de brackets",
   "description": "Brackets metálicos convencionales",
+  "category": "Ortodoncia",
   "durationMinutes": 90,
   "price": 1800000.00
 }
 
-### Escenario 1d · Un cliente SIN iniciar sesión consulta el perfil → espera 200
-GET {{baseUrl}}/organization/profile
-
-### Escenario 1e · Un cliente SIN iniciar sesión consulta el catálogo → espera 200
-GET {{baseUrl}}/services
-
-### Escenario 2a · Perfil con el nombre comercial en blanco → espera 400
-PUT {{baseUrl}}/organization/profile
+### Escenario 2 · Campos obligatorios faltantes → 400, no se guarda nada
+POST {{baseUrl}}/servicios
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "commercialName": "",
-  "contactEmail": "contacto@clinicanorte.co",
-  "contactPhone": "+57 604 444 5566",
-  "address": "Calle 50 # 45-20, Medellín"
+  "category": "Ortodoncia"
 }
 
-### Escenario 2b · Servicio sin sus datos obligatorios → espera 400
-POST {{baseUrl}}/services
+### Escenario 3a · Duración menor o igual a cero → rechazado
+POST {{baseUrl}}/servicios
 Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "specialtyId": "{{specialty.response.body.id}}",
-  "name": "",
-  "description": "Sin nombre, duración ni precio"
+  "name": "Servicio inválido",
+  "category": "Ortodoncia",
+  "durationMinutes": 0,
+  "price": 100
 }
 
-### Seguridad · Un visitante sin sesión intenta crear un servicio → debe rechazarse
-POST {{baseUrl}}/services
+### Escenario 3b · Precio menor o igual a cero → rechazado
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
-  "specialtyId": "{{specialty.response.body.id}}",
-  "name": "Intento sin sesión",
+  "name": "Servicio inválido",
+  "category": "Ortodoncia",
   "durationMinutes": 30,
-  "price": 50000
+  "price": 0
 }
+
+### Nombre duplicado (otras mayúsculas) → 409
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "INSTALACION DE BRACKETS",
+  "category": "Ortodoncia",
+  "durationMinutes": 30,
+  "price": 100
+}
+
+### Consultar el catálogo sin sesión → 200
+GET {{baseUrl}}/servicios
+
+### Consultar un servicio por id, sin sesión → 200
+GET {{baseUrl}}/servicios/{{created.response.body.id}}
+
+### Filtrar por categoría → 200
+GET {{baseUrl}}/servicios?categoria=Ortodoncia
+
+### Crear sin sesión → rechazado
+POST {{baseUrl}}/servicios
+Content-Type: application/json
+
+{
+  "name": "Sin sesión",
+  "category": "Ortodoncia",
+  "durationMinutes": 30,
+  "price": 100
+}
+
+### Desactivar el servicio (PUT con status=INACTIVO) → 200
+PUT {{baseUrl}}/servicios/{{created.response.body.id}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Instalación de brackets",
+  "category": "Ortodoncia",
+  "durationMinutes": 90,
+  "price": 1800000.00,
+  "status": "INACTIVO"
+}
+
+### Eliminar el servicio → 204
+DELETE {{baseUrl}}/servicios/{{created.response.body.id}}
+Authorization: Bearer {{token}}

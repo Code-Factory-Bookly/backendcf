@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/services")
+@RequestMapping("/api/v1/servicios")
 public class ServiceOfferingController {
 
     private final ServiceOfferingService serviceOfferingService;
@@ -30,8 +30,8 @@ public class ServiceOfferingController {
 
     @GetMapping
     public ResponseEntity<List<ServiceOfferingResponse>> list(
-            @RequestParam(name = "specialtyId", required = false) UUID specialtyId) {
-        return ResponseEntity.ok(serviceOfferingService.list(specialtyId));
+            @RequestParam(name = "categoria", required = false) String category) {
+        return ResponseEntity.ok(serviceOfferingService.list(category));
     }
 
     @GetMapping("/{id}")

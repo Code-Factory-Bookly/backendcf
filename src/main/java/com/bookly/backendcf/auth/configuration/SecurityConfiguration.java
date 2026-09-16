@@ -26,16 +26,9 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
-                        // Perfil y catálogo: cualquier visitante los consulta, solo ADMIN los modifica.
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/v1/organization/profile",
-                                "/api/v1/specialties",
-                                "/api/v1/services",
-                                "/api/v1/services/*").permitAll()
-                        .requestMatchers(
-                                "/api/v1/organization/profile",
-                                "/api/v1/specialties/**",
-                                "/api/v1/services/**").hasRole("ADMIN")
+                        // Catálogo de servicios: cualquier visitante lo consulta, solo ADMIN lo modifica.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/servicios", "/api/v1/servicios/*").permitAll()
+                        .requestMatchers("/api/v1/servicios/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 

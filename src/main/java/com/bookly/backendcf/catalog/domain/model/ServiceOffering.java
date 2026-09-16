@@ -2,12 +2,11 @@ package com.bookly.backendcf.catalog.domain.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -18,29 +17,32 @@ import java.util.UUID;
  * no Service para no confundirse con la anotación {@code @Service} de Spring.
  */
 @Entity
-@Table(name = "service_offering")
+@Table(name = "servicios")
 public class ServiceOffering {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "specialty_id", nullable = false)
-    private Specialty specialty;
-
-    @Column(nullable = false, length = 150)
+    @Column(name = "nombre", nullable = false, length = 150)
     private String name;
 
-    @Column(length = 500)
+    @Column(name = "descripcion", length = 500)
     private String description;
 
+    @Column(name = "categoria", nullable = false, length = 100)
+    private String category;
+
     /** Imprescindible para las agendas: determina cuántos huecos ocupa una cita. */
-    @Column(name = "duration_minutes", nullable = false)
+    @Column(name = "duracion_minutos", nullable = false)
     private int durationMinutes;
 
-    @Column(nullable = false, precision = 12, scale = 2)
+    @Column(name = "precio", nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado", nullable = false, length = 20)
+    private ServiceStatus status;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -51,33 +53,35 @@ public class ServiceOffering {
     protected ServiceOffering() {
     }
 
-    public ServiceOffering(
-            Specialty specialty, String name, String description, int durationMinutes, BigDecimal price) {
-        this.specialty = specialty;
+    /** El estado nace en ACTIVO: lo asigna el sistema, no quien registra el servicio. */
+    public ServiceOffering(String name, String description, String category, int durationMinutes, BigDecimal price) {
         this.name = name;
         this.description = description;
+        this.category = category;
         this.durationMinutes = durationMinutes;
         this.price = price;
+        this.status = ServiceStatus.ACTIVO;
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = this.createdAt;
     }
 
+    /** {@code status} es opcional: si no se envía, se conserva el estado actual. */
     public void update(
-            Specialty specialty, String name, String description, int durationMinutes, BigDecimal price) {
-        this.specialty = specialty;
+            String name, String description, String category, int durationMinutes, BigDecimal price,
+            ServiceStatus status) {
         this.name = name;
         this.description = description;
+        this.category = category;
         this.durationMinutes = durationMinutes;
         this.price = price;
+        if (status != null) {
+            this.status = status;
+        }
         this.updatedAt = OffsetDateTime.now();
     }
 
     public UUID getId() {
         return id;
-    }
-
-    public Specialty getSpecialty() {
-        return specialty;
     }
 
     public String getName() {
@@ -88,12 +92,20 @@ public class ServiceOffering {
         return description;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
     public int getDurationMinutes() {
         return durationMinutes;
     }
 
     public BigDecimal getPrice() {
         return price;
+    }
+
+    public ServiceStatus getStatus() {
+        return status;
     }
 
     public OffsetDateTime getCreatedAt() {

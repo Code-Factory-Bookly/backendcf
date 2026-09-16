@@ -51,10 +51,14 @@ public class UserAccount {
     }
 
     public UserAccount(String email, String passwordHash, String fullName) {
+        this(email, passwordHash, fullName, UserRole.PATIENT);
+    }
+
+    public UserAccount(String email, String passwordHash, String fullName, UserRole role) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
-        this.role = UserRole.PATIENT;
+        this.role = role;
         this.enabled = true;
         this.failedLoginAttempts = 0;
         this.createdAt = OffsetDateTime.now();

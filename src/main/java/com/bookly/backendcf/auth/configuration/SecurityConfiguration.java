@@ -6,8 +6,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -25,11 +25,16 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
-                        // Catálogo de servicios: cualquier visitante lo consulta, solo ADMIN lo modifica.
-                        .requestMatchers(HttpMethod.GET, "/api/v1/servicios", "/api/v1/servicios/*").permitAll()
-                        .requestMatchers("/api/v1/servicios/**").hasRole("ADMIN")
-                        .anyRequest().authenticated())
+        .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+
+        // Aprovisionamiento inicial: público y de un solo uso
+        .requestMatchers(HttpMethod.POST, "/api/v1/platform/setup").permitAll()
+
+        // Catálogo: cualquiera puede consultar; solo ADMIN modifica
+        .requestMatchers(HttpMethod.GET, "/api/v1/servicios", "/api/v1/servicios/**").permitAll()
+        .requestMatchers("/api/v1/servicios/**").hasRole("ADMIN")
+
+        .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

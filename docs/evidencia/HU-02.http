@@ -1,0 +1,112 @@
+# Evidencia HU-02 · Catálogo de servicios
+# Requiere la extensión "REST Client" de VS Code: pulsa "Send Request" sobre cada bloque, EN ORDEN.
+# Antes de empezar: base recién creada y un usuario ADMIN (ver docs/HU-02-service-catalog.md).
+
+@baseUrl = http://localhost:8080/api/v1
+@token = {{login.response.body.accessToken}}
+
+### 0 · Iniciar sesión como ADMIN (el token se reutiliza en los bloques siguientes)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@clinicanorte.co",
+  "password": "Secreta123*"
+}
+
+### Escenario 1 (Arquitectura-BD) · Registro exitoso → 201, estado ACTIVO asignado por el sistema
+# @name created
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Instalación de brackets",
+  "description": "Brackets metálicos convencionales",
+  "category": "Ortodoncia",
+  "durationMinutes": 90,
+  "price": 1800000.00
+}
+
+### Escenario 2 · Campos obligatorios faltantes → 400, no se guarda nada
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "category": "Ortodoncia"
+}
+
+### Escenario 3a · Duración menor o igual a cero → rechazado
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Servicio inválido",
+  "category": "Ortodoncia",
+  "durationMinutes": 0,
+  "price": 100
+}
+
+### Escenario 3b · Precio menor o igual a cero → rechazado
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Servicio inválido",
+  "category": "Ortodoncia",
+  "durationMinutes": 30,
+  "price": 0
+}
+
+### Nombre duplicado (otras mayúsculas) → 409
+POST {{baseUrl}}/servicios
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "INSTALACION DE BRACKETS",
+  "category": "Ortodoncia",
+  "durationMinutes": 30,
+  "price": 100
+}
+
+### Consultar el catálogo sin sesión → 200
+GET {{baseUrl}}/servicios
+
+### Consultar un servicio por id, sin sesión → 200
+GET {{baseUrl}}/servicios/{{created.response.body.id}}
+
+### Filtrar por categoría → 200
+GET {{baseUrl}}/servicios?categoria=Ortodoncia
+
+### Crear sin sesión → rechazado
+POST {{baseUrl}}/servicios
+Content-Type: application/json
+
+{
+  "name": "Sin sesión",
+  "category": "Ortodoncia",
+  "durationMinutes": 30,
+  "price": 100
+}
+
+### Desactivar el servicio (PUT con status=INACTIVO) → 200
+PUT {{baseUrl}}/servicios/{{created.response.body.id}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Instalación de brackets",
+  "category": "Ortodoncia",
+  "durationMinutes": 90,
+  "price": 1800000.00,
+  "status": "INACTIVO"
+}
+
+### Eliminar el servicio → 204
+DELETE {{baseUrl}}/servicios/{{created.response.body.id}}
+Authorization: Bearer {{token}}

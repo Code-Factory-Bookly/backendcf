@@ -25,11 +25,16 @@ public class SecurityConfiguration {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
-                        // Aprovisionamiento inicial: público y de un solo uso, porque la plataforma
-                        // todavía no existe cuando se llama. A partir del segundo intento responde 409.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/platform/setup").permitAll()
-                        .anyRequest().authenticated())
+        .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+
+        // Aprovisionamiento inicial: público y de un solo uso
+        .requestMatchers(HttpMethod.POST, "/api/v1/platform/setup").permitAll()
+
+        // Catálogo: cualquiera puede consultar; solo ADMIN modifica
+        .requestMatchers(HttpMethod.GET, "/api/v1/servicios", "/api/v1/servicios/**").permitAll()
+        .requestMatchers("/api/v1/servicios/**").hasRole("ADMIN")
+
+        .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

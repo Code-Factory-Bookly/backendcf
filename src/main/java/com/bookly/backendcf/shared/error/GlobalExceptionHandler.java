@@ -61,6 +61,24 @@ public class GlobalExceptionHandler {
                 Map.of("lockedUntil", exception.getLockedUntil().toString()));
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleResourceNotFound(ResourceNotFoundException exception) {
+        return buildResponse(
+                HttpStatus.NOT_FOUND,
+                exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getDetails());
+    }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleResourceConflict(ResourceConflictException exception) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getDetails());
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation() {
         return buildResponse(

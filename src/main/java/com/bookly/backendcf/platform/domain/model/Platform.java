@@ -1,4 +1,4 @@
-package com.bookly.backendcf.organization.domain.model;
+package com.bookly.backendcf.platform.domain.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,9 +11,10 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/** La plataforma en sí: una sola fila, sin identidad legal (sin NIT ni razón social). */
 @Entity
-@Table(name = "organization")
-public class Organization {
+@Table(name = "platform")
+public class Platform {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -22,23 +23,19 @@ public class Organization {
     @Column(nullable = false, length = 200)
     private String name;
 
-    @Column(name = "tax_id", nullable = false, unique = true, length = 20)
-    private String taxId;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private OrganizationStatus status;
+    private PlatformStatus status;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    protected Organization() {
+    protected Platform() {
     }
 
-    public Organization(String name, String taxId) {
+    public Platform(String name) {
         this.name = name;
-        this.taxId = taxId;
-        this.status = OrganizationStatus.ACTIVE;
+        this.status = PlatformStatus.ACTIVE;
         this.createdAt = OffsetDateTime.now();
     }
 
@@ -50,11 +47,7 @@ public class Organization {
         return name;
     }
 
-    public String getTaxId() {
-        return taxId;
-    }
-
-    public OrganizationStatus getStatus() {
+    public PlatformStatus getStatus() {
         return status;
     }
 

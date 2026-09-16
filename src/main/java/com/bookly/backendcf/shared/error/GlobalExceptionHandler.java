@@ -3,7 +3,7 @@ package com.bookly.backendcf.shared.error;
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
 import com.bookly.backendcf.auth.application.AccountLockedException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
-import com.bookly.backendcf.organization.application.OrganizationAlreadyExistsException;
+import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,17 +37,17 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 "EMAIL_ALREADY_REGISTERED",
                 exception.getMessage(),
-                Map.of("email", "El correo ya está registrado en esta organización"));
+                Map.of("email", "El correo ya está registrado"));
     }
 
-    @ExceptionHandler(OrganizationAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleOrganizationAlreadyExists(
-            OrganizationAlreadyExistsException exception) {
+    @ExceptionHandler(PlatformAlreadyConfiguredException.class)
+    public ResponseEntity<ApiErrorResponse> handlePlatformAlreadyConfigured(
+            PlatformAlreadyConfiguredException exception) {
         return buildResponse(
                 HttpStatus.CONFLICT,
-                "ORGANIZATION_ALREADY_EXISTS",
+                "PLATFORM_ALREADY_CONFIGURED",
                 exception.getMessage(),
-                Map.of("organization", "El aprovisionamiento solo puede realizarse una vez"));
+                Map.of("platform", "El aprovisionamiento solo puede realizarse una vez"));
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)

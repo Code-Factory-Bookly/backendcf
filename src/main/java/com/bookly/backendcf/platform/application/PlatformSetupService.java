@@ -1,50 +1,49 @@
-package com.bookly.backendcf.organization.application;
+package com.bookly.backendcf.platform.application;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
-import com.bookly.backendcf.organization.domain.model.Organization;
-import com.bookly.backendcf.organization.infrastructure.persistence.OrganizationRepository;
-import com.bookly.backendcf.organization.presentation.dto.RegisterOrganizationRequest;
-import com.bookly.backendcf.organization.presentation.dto.RegisterOrganizationResponse;
+import com.bookly.backendcf.platform.domain.model.Platform;
+import com.bookly.backendcf.platform.infrastructure.persistence.PlatformRepository;
+import com.bookly.backendcf.platform.presentation.dto.PlatformSetupRequest;
+import com.bookly.backendcf.platform.presentation.dto.PlatformSetupResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class RegisterOrganizationService {
+public class PlatformSetupService {
 
-    private final OrganizationRepository organizationRepository;
+    private final PlatformRepository platformRepository;
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final WelcomeNotificationPort welcomeNotificationPort;
 
-    public RegisterOrganizationService(
-            OrganizationRepository organizationRepository,
+    public PlatformSetupService(
+            PlatformRepository platformRepository,
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder,
             WelcomeNotificationPort welcomeNotificationPort) {
-        this.organizationRepository = organizationRepository;
+        this.platformRepository = platformRepository;
         this.userAccountRepository = userAccountRepository;
         this.passwordEncoder = passwordEncoder;
         this.welcomeNotificationPort = welcomeNotificationPort;
     }
 
     /**
-     * Aprovisiona la organización y su administrador en una sola transacción: si falla cualquiera de
+     * Aprovisiona la plataforma y su administrador en una sola transacción: si falla cualquiera de
      * las dos escrituras, no queda nada a medias.
      *
      * <p>Solo puede ejecutarse una vez. La base lo garantiza además con un índice único sobre una
      * expresión constante, de modo que dos peticiones simultáneas no puedan colarse ambas.
      */
     @Transactional
-    public RegisterOrganizationResponse register(RegisterOrganizationRequest request) {
-        if (organizationRepository.count() > 0) {
-            throw new OrganizationAlreadyExistsException();
+    public PlatformSetupResponse setup(PlatformSetupRequest request) {
+        if (platformRepository.count() > 0) {
+            throw new PlatformAlreadyConfiguredException();
         }
 
-        Organization organization = organizationRepository.save(
-                new Organization(normalizeName(request.name()), request.taxId().trim()));
+        Platform platform = platformRepository.save(new Platform(normalizeName(request.name())));
 
         UserAccount adminUser = userAccountRepository.save(new UserAccount(
                 normalizeEmail(request.adminEmail()),
@@ -52,12 +51,12 @@ public class RegisterOrganizationService {
                 normalizeFullName(request.adminFullName()),
                 UserRole.ADMIN));
 
-        welcomeNotificationPort.sendOrganizationWelcome(
-                organization.getId(),
-                organization.getName(),
+        welcomeNotificationPort.sendPlatformWelcome(
+                platform.getId(),
+                platform.getName(),
                 adminUser.getEmail());
 
-        return RegisterOrganizationResponse.from(organization, adminUser);
+        return PlatformSetupResponse.from(platform, adminUser);
     }
 
     private String normalizeName(String name) {

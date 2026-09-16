@@ -1,21 +1,14 @@
-package com.bookly.backendcf.organization.presentation.dto;
+package com.bookly.backendcf.platform.presentation.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-public record RegisterOrganizationRequest(
-        @NotBlank(message = "La razón social es obligatoria")
-        @Size(max = 200, message = "La razón social no puede superar 200 caracteres")
+public record PlatformSetupRequest(
+        @NotBlank(message = "El nombre de la plataforma es obligatorio")
+        @Size(max = 200, message = "El nombre de la plataforma no puede superar 200 caracteres")
         String name,
-
-        @NotBlank(message = "El NIT es obligatorio")
-        @Size(min = 5, max = 20, message = "El NIT debe tener entre 5 y 20 caracteres")
-        @Pattern(
-                regexp = "^[0-9][0-9-]*$",
-                message = "El NIT solo puede contener dígitos y guiones")
-        String taxId,
 
         @NotBlank(message = "El correo del administrador es obligatorio")
         @Email(message = "El correo no tiene un formato válido")

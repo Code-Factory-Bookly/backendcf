@@ -16,13 +16,13 @@ class UserAccountTest {
 
     @BeforeEach
     void setUp() {
-        account = new UserAccount("patient@example.com", "hashed-password", "Patient One");
+        account = new UserAccount("customer@example.com", "hashed-password", "Customer One");
         now = OffsetDateTime.now();
     }
 
     @Test
-    void unaCuentaNuevaQuedaHabilitadaConRolPacienteYSinIntentosFallidos() {
-        assertEquals(UserRole.PATIENT, account.getRole());
+    void unaCuentaNuevaQuedaHabilitadaConRolClienteYSinIntentosFallidos() {
+        assertEquals(UserRole.CUSTOMER, account.getRole());
         assertTrue(account.isEnabled());
         assertEquals(0, account.getFailedLoginAttempts());
         assertNull(account.getLockedUntil());

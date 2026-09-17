@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-public record RegisterPatientRequest(
+public record RegisterCustomerRequest(
         @NotBlank(message = "El correo es obligatorio")
         @Email(message = "El correo no tiene un formato válido")
         @Size(max = 320, message = "El correo no puede superar 320 caracteres")

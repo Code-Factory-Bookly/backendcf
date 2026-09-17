@@ -25,6 +25,7 @@ services:
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-backendcf}
       DB_USERNAME: ${POSTGRES_USER:-backendcf}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-backendcf_dev_password}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET debe configurarse en .env}
     ports:
       - "8080:8080"
     depends_on:

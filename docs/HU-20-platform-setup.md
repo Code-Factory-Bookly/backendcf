@@ -69,10 +69,10 @@ Sin `tax_id`, sin índice de unicidad sobre el nombre: con una sola fila garanti
 
 ## Decisiones tomadas
 
-- **La unicidad la sostiene la base, no solo el servicio.** `PlatformSetupService` comprueba
-  `platformRepository.count() > 0`, pero entre esa lectura y la escritura caben dos peticiones
-  simultáneas. El índice `uk_platform_singleton` hace que la segunda falle en la base pase lo que
-  pase.
+- **La unicidad la sostiene la base, no solo el servicio.** `PlatformSetupService` conserva la
+  comprobación rápida `platformRepository.count() > 0`, pero el índice `uk_platform_singleton` es la
+  autoridad ante peticiones simultáneas. La operación usa `saveAndFlush()` y traduce la violación
+  de integridad a `PLATFORM_ALREADY_CONFIGURED` (`409`). Ver ADR-006.
 - **Rutas en inglés.** A diferencia de HU-02, donde Arquitectura-BD pidió rutas en español, el AC de
   esta historia especifica `POST /api/v1/platform/setup` en inglés — se respetó tal cual, alineado
   además con la convención base del proyecto (código y rutas en inglés, mensajes en español).

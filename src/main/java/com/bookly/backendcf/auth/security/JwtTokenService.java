@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
-import java.security.SecureRandom;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,9 +18,7 @@ public class JwtTokenService {
     public JwtTokenService(@Value("${security.jwt.secret:}") String secret,
                            @Value("${security.jwt.expiration-seconds:3600}") long expiresInSeconds) {
         if (secret.isBlank()) {
-            byte[] generatedSecret = new byte[32];
-            new SecureRandom().nextBytes(generatedSecret);
-            secret = Base64.getUrlEncoder().withoutPadding().encodeToString(generatedSecret);
+            throw new IllegalArgumentException("JWT_SECRET debe estar configurado y ser persistente");
         }
         if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
             throw new IllegalArgumentException("security.jwt.secret debe tener al menos 32 bytes");

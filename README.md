@@ -1,22 +1,26 @@
 # Bookly Backend
 
-Backend de la plataforma de reservas de servicios del caso 14 de CodeF@ctory. El sistema permite gestionar usuarios y autenticación para que pacientes, profesionales y administradores puedan acceder posteriormente a reservas, agendas y herramientas de gestión.
+Backend de la plataforma de reservas de servicios del caso 14 de CodeF@ctory. El sistema permite gestionar usuarios y autenticación para que clientes, profesionales y administradores puedan acceder posteriormente a reservas, agendas y herramientas de gestión.
 
 ## Estado del Sprint 1
 
 Actualmente se encuentran implementados:
 
-- HU-01: registro de paciente.
+- HU-01: registro de cliente.
+- HU-02: catálogo de servicios con consulta pública y administración restringida a `ADMIN`.
 - HU-03: inicio de sesión seguro.
+- HU-20: configuración inicial de la plataforma, de un solo uso.
 - API REST versionada bajo `/api/v1`.
 - Persistencia en PostgreSQL con JPA/Hibernate.
+- Migraciones de esquema administradas por Flyway (`V1` a `V5`).
+- Roles unificados: `CUSTOMER`, `PROFESSIONAL` y `ADMIN`.
 - Contraseñas almacenadas mediante BCrypt.
 - Tokens Bearer firmados con HMAC-SHA256 y expiración configurable.
 - Bloqueo temporal después de 5 intentos fallidos durante 15 minutos.
 - Manejo uniforme de errores con `errorCode`, `message`, `details`, `traceId` y `timestamp`.
 - Ejecución local y contenerizada con Docker Compose.
 
-La creación de reservas, agendas, reportes, MFA, revocación/rotación de tokens y observabilidad avanzada quedan para los siguientes sprints.
+La creación de reservas, agendas, reportes, MFA, revocación/rotación de tokens y observabilidad avanzada quedan para los siguientes sprints. En HU-02, la especialidad se representa mediante la categoría del servicio; el nombre comercial y los datos generales de la plataforma pertenecen a HU-20.
 
 ## Tecnologías
 
@@ -118,16 +122,16 @@ Las siguientes propiedades pueden definirse como variables de entorno:
 | `POSTGRES_DB` | `backendcf` | Nombre de la base en Compose |
 | `POSTGRES_USER` | `backendcf` | Usuario de PostgreSQL |
 | `POSTGRES_PASSWORD` | valor de desarrollo | Contraseña de PostgreSQL |
-| `JWT_SECRET` | se genera temporalmente | Clave de firma; en entornos persistentes debe ser estable y secreta |
+| `JWT_SECRET` | obligatorio | Clave de firma persistente de al menos 32 bytes; nunca debe cambiar entre reinicios |
 | `JWT_EXPIRATION_SECONDS` | `3600` | Duración del token |
 | `LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `LOGIN_LOCK_MINUTES` | `15` | Duración del bloqueo |
 
-En producción, `JWT_SECRET`, credenciales de base de datos y demás secretos deben gestionarse fuera del código y del repositorio.
+`JWT_SECRET` debe definirse en `.env` a partir de `.env.example` y conservarse entre reinicios. En producción, esta clave, las credenciales de base de datos y demás secretos deben gestionarse fuera del código y del repositorio.
 
 ## API de autenticación
 
-### Registrar paciente
+### Registrar cliente
 
 ```http
 POST /api/v1/auth/register
@@ -164,6 +168,42 @@ Una respuesta exitosa (`200 OK`) contiene un `accessToken`, el tipo `Bearer`, la
 Authorization: Bearer <accessToken>
 ```
 
+## Catálogo y configuración de plataforma
+
+### Catálogo de servicios (HU-02)
+
+Las consultas son públicas:
+
+```http
+GET /api/v1/servicios
+GET /api/v1/servicios/{id}
+GET /api/v1/servicios?categoria=<categoria>
+```
+
+La administración requiere un JWT con rol `ADMIN`:
+
+```http
+POST   /api/v1/servicios
+PUT    /api/v1/servicios/{id}
+DELETE /api/v1/servicios/{id}
+```
+
+El alta recibe `nombre`, `descripcion` opcional, `categoria`, `durationMinutes` y `price`; el
+estado inicial siempre es `ACTIVO`. La actualización permite además `status` (`ACTIVO` o
+`INACTIVO`). El nombre es único sin distinguir mayúsculas, la duración está entre 1 y 480 minutos
+y el precio debe ser mayor que cero. El alcance aprobado está documentado en [ADR-005](docs/ADR-005-alcance-HU-02.md).
+
+### Configuración inicial (HU-20)
+
+```http
+POST /api/v1/platform/setup
+Content-Type: application/json
+```
+
+Este endpoint es público para permitir el aprovisionamiento inicial, pero solo admite una plataforma.
+Un segundo intento responde `409 PLATFORM_ALREADY_CONFIGURED`. La estructura completa de payloads y
+respuestas se encuentra en el [contrato OpenAPI](docs/openapi.yaml).
+
 Respuestas de seguridad:
 
 | Código | Código interno | Situación |
@@ -172,6 +212,11 @@ Respuestas de seguridad:
 | `401` | `INVALID_CREDENTIALS` | Correo o contraseña incorrectos |
 | `423` | `ACCOUNT_LOCKED` | Cuenta bloqueada temporalmente |
 | `400` | `VALIDATION_ERROR` | Payload inválido |
+| `401` | `UNAUTHORIZED` | Solicitud protegida sin autenticación válida |
+| `403` | `ACCESS_DENIED` | Usuario autenticado sin permisos suficientes |
+
+Los errores de seguridad mantienen el mismo envoltorio JSON con `errorCode`, `message`, `details`,
+`traceId` y `timestamp`.
 
 ## Probar el bloqueo
 
@@ -196,5 +241,5 @@ La suite incluye prueba de contexto y pruebas unitarias para login exitoso, cred
 
 - [Arquitectura de software - Sprint 1](README_ARQUITECTURA.md)
 - [Base de datos - Sprint 1](README_BASE_DE_DATOS.md)
-- [HU-01 - Registro de paciente](HU-01_Registro_Paciente.md)
-- [Lineamientos de arquitectura](Lineamientos_Arquitectura.md)
+- [Contrato OpenAPI](docs/openapi.yaml)
+

@@ -2,19 +2,20 @@ package com.bookly.backendcf.auth.application;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
-import com.bookly.backendcf.auth.presentation.dto.RegisterPatientRequest;
-import com.bookly.backendcf.auth.presentation.dto.RegisterPatientResponse;
+import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerRequest;
+import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class RegisterPatientService {
+public class RegisterCustomerService {
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public RegisterPatientService(
+    public RegisterCustomerService(
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder) {
         this.userAccountRepository = userAccountRepository;
@@ -22,7 +23,7 @@ public class RegisterPatientService {
     }
 
     @Transactional
-    public RegisterPatientResponse register(RegisterPatientRequest request) {
+    public RegisterCustomerResponse register(RegisterCustomerRequest request) {
         String normalizedEmail = normalizeEmail(request.email());
 
         if (userAccountRepository.existsByEmail(normalizedEmail)) {
@@ -34,7 +35,13 @@ public class RegisterPatientService {
                 passwordEncoder.encode(request.password()),
                 normalizeFullName(request.fullName()));
 
-        return RegisterPatientResponse.from(userAccountRepository.save(userAccount));
+        try {
+            // La restricción UNIQUE de PostgreSQL resuelve la carrera entre dos registros
+            // concurrentes; flush permite traducirla aquí al error funcional correcto.
+            return RegisterCustomerResponse.from(userAccountRepository.saveAndFlush(userAccount));
+        } catch (DataIntegrityViolationException exception) {
+            throw new EmailAlreadyRegisteredException();
+        }
     }
 
     private String normalizeEmail(String email) {

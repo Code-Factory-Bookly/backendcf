@@ -1,0 +1,221 @@
+openapi: 3.0.3
+info:
+  title: Bookly Backend API
+  version: 1.0.0
+  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03 y HU-20.
+servers:
+  - url: http://localhost:8080/api/v1
+tags:
+  - name: Auth
+  - name: Platform
+  - name: Services
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registrar cliente
+      operationId: registerCustomer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterCustomerRequest' }
+      responses:
+        '201':
+          description: Cliente registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegisterCustomerResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '423': { $ref: '#/components/responses/LockedError' }
+  /platform/setup:
+    post:
+      tags: [Platform]
+      summary: Aprovisionar la plataforma una sola vez
+      operationId: setupPlatform
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformSetupRequest' }
+      responses:
+        '201':
+          description: Plataforma creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformSetupResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /servicios:
+    get:
+      tags: [Services]
+      summary: Consultar catálogo
+      operationId: listServices
+      parameters:
+        - name: categoria
+          in: query
+          required: false
+          schema: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Servicios del catálogo
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ServiceOffering' }
+    post:
+      tags: [Services]
+      summary: Registrar servicio
+      operationId: createService
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceOfferingRequest' }
+      responses:
+        '201': { description: Servicio creado }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /servicios/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Services]
+      summary: Consultar servicio
+      operationId: getService
+      responses:
+        '200': { description: Servicio encontrado }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    put:
+      tags: [Services]
+      summary: Actualizar servicio
+      operationId: updateService
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceOfferingRequest' }
+      responses:
+        '200': { description: Servicio actualizado }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+    delete:
+      tags: [Services]
+      summary: Eliminar servicio
+      operationId: deleteService
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Servicio eliminado }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterCustomerRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, minLength: 8, maxLength: 64 }
+        fullName: { type: string, maxLength: 150 }
+    RegisterCustomerResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+    LoginResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, format: int64 }
+        user: { $ref: '#/components/schemas/RegisterCustomerResponse' }
+    PlatformSetupRequest:
+      type: object
+      required: [name, adminEmail, adminPassword, adminFullName]
+      properties:
+        name: { type: string, maxLength: 200 }
+        adminEmail: { type: string, format: email, maxLength: 320 }
+        adminPassword: { type: string, format: password, minLength: 8, maxLength: 64 }
+        adminFullName: { type: string, maxLength: 150 }
+    PlatformSetupResponse:
+      type: object
+      properties:
+        platformId: { type: string, format: uuid }
+        name: { type: string }
+        adminUserId: { type: string, format: uuid }
+    ServiceOfferingRequest:
+      type: object
+      required: [name, category, durationMinutes, price]
+      properties:
+        name: { type: string, maxLength: 150 }
+        description: { type: string, maxLength: 500 }
+        category: { type: string, maxLength: 100 }
+        durationMinutes: { type: integer, minimum: 1, maximum: 480 }
+        price: { type: number, format: double, exclusiveMinimum: true }
+        status: { type: string, enum: [ACTIVO, INACTIVO] }
+    ServiceOffering:
+      allOf:
+        - $ref: '#/components/schemas/ServiceOfferingRequest'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+    ApiError:
+      type: object
+      required: [errorCode, message, details, traceId, timestamp]
+      properties:
+        errorCode: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: { type: string } }
+        traceId: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+  responses:
+    ValidationError: { description: Datos inválidos, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    ConflictError: { description: Conflicto de integridad o estado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    UnauthorizedError: { description: Autenticación requerida, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    ForbiddenError: { description: Permisos insuficientes, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    LockedError: { description: Cuenta bloqueada, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    NotFoundError: { description: Recurso no encontrado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

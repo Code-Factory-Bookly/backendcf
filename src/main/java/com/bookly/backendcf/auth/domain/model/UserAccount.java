@@ -51,7 +51,7 @@ public class UserAccount {
     }
 
     public UserAccount(String email, String passwordHash, String fullName) {
-        this(email, passwordHash, fullName, UserRole.PATIENT);
+        this(email, passwordHash, fullName, UserRole.CUSTOMER);
     }
 
     public UserAccount(String email, String passwordHash, String fullName, UserRole role) {

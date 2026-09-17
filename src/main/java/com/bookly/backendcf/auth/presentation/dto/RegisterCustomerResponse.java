@@ -5,15 +5,15 @@ import com.bookly.backendcf.auth.domain.model.UserRole;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record RegisterPatientResponse(
+public record RegisterCustomerResponse(
         UUID id,
         String email,
         String fullName,
         UserRole role,
         OffsetDateTime createdAt) {
 
-    public static RegisterPatientResponse from(UserAccount userAccount) {
-        return new RegisterPatientResponse(
+    public static RegisterCustomerResponse from(UserAccount userAccount) {
+        return new RegisterCustomerResponse(
                 userAccount.getId(),
                 userAccount.getEmail(),
                 userAccount.getFullName(),

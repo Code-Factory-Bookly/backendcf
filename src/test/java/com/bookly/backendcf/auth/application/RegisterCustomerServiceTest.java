@@ -11,8 +11,8 @@ import static org.mockito.Mockito.when;
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
-import com.bookly.backendcf.auth.presentation.dto.RegisterPatientRequest;
-import com.bookly.backendcf.auth.presentation.dto.RegisterPatientResponse;
+import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerRequest;
+import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -27,54 +27,54 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
-class RegisterPatientServiceTest {
+class RegisterCustomerServiceTest {
 
     @Mock
     private UserAccountRepository repository;
 
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-    private RegisterPatientService service;
+    private RegisterCustomerService service;
 
     @BeforeEach
     void setUp() {
-        service = new RegisterPatientService(repository, passwordEncoder);
+        service = new RegisterCustomerService(repository, passwordEncoder);
     }
 
     @Test
-    void registroExitosoCreaLaCuentaConRolPacienteYPasswordHasheado() {
-        when(repository.existsByEmail("patient@example.com")).thenReturn(false);
-        when(repository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void registroExitosoCreaLaCuentaConRolClienteYPasswordHasheado() {
+        when(repository.existsByEmail("customer@example.com")).thenReturn(false);
+        when(repository.saveAndFlush(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RegisterPatientResponse response = service.register(
-                new RegisterPatientRequest(" PATIENT@EXAMPLE.COM ", "Valid1!pass", "  Patient   One  "));
+        RegisterCustomerResponse response = service.register(
+                new RegisterCustomerRequest(" CUSTOMER@EXAMPLE.COM ", "Valid1!pass", "  Customer   One  "));
 
-        assertEquals("patient@example.com", response.email());
-        assertEquals("Patient One", response.fullName());
-        assertEquals(UserRole.PATIENT, response.role());
+        assertEquals("customer@example.com", response.email());
+        assertEquals("Customer One", response.fullName());
+        assertEquals(UserRole.CUSTOMER, response.role());
 
         ArgumentCaptor<UserAccount> savedAccount = ArgumentCaptor.forClass(UserAccount.class);
-        verify(repository).save(savedAccount.capture());
-        assertEquals("patient@example.com", savedAccount.getValue().getEmail());
+        verify(repository).saveAndFlush(savedAccount.capture());
+        assertEquals("customer@example.com", savedAccount.getValue().getEmail());
         assertTrue(passwordEncoder.matches("Valid1!pass", savedAccount.getValue().getPasswordHash()));
     }
 
     @Test
     void registroConCorreoYaRegistradoRechazaLaSolicitud() {
-        when(repository.existsByEmail("patient@example.com")).thenReturn(true);
+        when(repository.existsByEmail("customer@example.com")).thenReturn(true);
 
         assertThrows(EmailAlreadyRegisteredException.class,
-                () -> service.register(new RegisterPatientRequest(
-                        "patient@example.com", "Valid1!pass", "Patient One")));
+                () -> service.register(new RegisterCustomerRequest(
+                        "customer@example.com", "Valid1!pass", "Customer One")));
 
-        verify(repository, never()).save(any());
+        verify(repository, never()).saveAndFlush(any());
     }
 
     @Test
     void registroConContrasenaDebilEsRechazadoPorLaValidacionDelContrato() {
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
-        Set<ConstraintViolation<RegisterPatientRequest>> violations = validator.validate(
-                new RegisterPatientRequest("patient@example.com", "abc12345", "Patient One"));
+        Set<ConstraintViolation<RegisterCustomerRequest>> violations = validator.validate(
+                new RegisterCustomerRequest("customer@example.com", "abc12345", "Customer One"));
 
         assertEquals(1, violations.size());
         assertEquals("password", violations.iterator().next().getPropertyPath().toString());

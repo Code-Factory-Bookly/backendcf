@@ -10,6 +10,11 @@ El administrador registra y consulta el **catálogo de servicios** de la platafo
 categoría, descripción, duración y precio. Cualquier visitante puede consultarlo sin iniciar sesión;
 solo un usuario con rol `ADMIN` puede crear, editar o eliminar servicios.
 
+Este es el alcance vigente aprobado formalmente mediante el [ADR-005](ADR-005-alcance-HU-02.md): la configuración de contacto y la entidad
+independiente de especialidades no forman parte de HU-02. La categoría se almacena directamente en
+cada servicio y puede utilizarse como filtro del catálogo. La configuración general de la plataforma
+corresponde a HU-20.
+
 > **Historial de alcance:** la primera versión de esta rama incluía un módulo de perfil de
 > organización y una entidad de especialidad separada, con endpoints propios. Arquitectura-BD
 > (Elena Vargas) redefinió el alcance en el work item de Azure DevOps: *"la plataforma no requiere
@@ -56,7 +61,7 @@ borrarlo.
 
 ## Esquema
 
-`docker/postgres/init/003-create-servicios.sql`, una sola tabla:
+`src/main/resources/db/migration/V5__create_service_catalog.sql`, una sola tabla:
 
 | Columna | Regla |
 |---|---|
@@ -66,12 +71,8 @@ borrarlo.
 | `precio` | `> 0` (CHECK en la base) |
 | `estado` | `ACTIVO` \| `INACTIVO`, por defecto `ACTIVO` |
 
-> ⚠️ Los scripts de `docker/postgres/init` solo se ejecutan al crear el volumen. Sobre un volumen
-> existente hay que aplicarlo a mano:
-> ```bash
-> docker compose exec db psql -U backendcf -d backendcf \
->   -f /docker-entrypoint-initdb.d/003-create-servicios.sql
-> ```
+Flyway aplica esta migración automáticamente al iniciar la aplicación, tanto en una base nueva como
+en una base existente. No es necesario ejecutar el script manualmente ni recrear el volumen.
 
 ---
 
@@ -84,7 +85,7 @@ borrarlo.
 | Campo de estado activo | `ServiceStatus { ACTIVO, INACTIVO }`. Lo asigna el sistema al crear; se puede cambiar al actualizar |
 | Precio estrictamente positivo | `@DecimalMin(value = "0.0", inclusive = false)` en la API y `CHECK (precio > 0)` en la base — verificado que la base lo rechaza aunque se salte la aplicación |
 | Confirmar si la descripción es obligatoria | No lo es: ni el Gherkin original ni la propuesta de Arquitectura-BD la incluyen entre los campos que se validan como faltantes |
-| Pruebas del CRUD | No incluidas en este commit. El tablero tiene una tarea separada, **"77 · \[Arquitectura-BD\] Probar escenarios de aceptación"**, distinta de la implementación |
+| Pruebas del CRUD | Cubiertas por `ServiceOfferingServiceTest`; los escenarios HTTP se conservan en `docs/evidencia/HU-02.http` |
 
 También se eliminó la especialidad como recurso independiente (`Specialty`, su repositorio, servicio,
 controlador y endpoints `/api/v1/specialties`): el Gherkin de Arquitectura-BD trata la categoría como
@@ -144,7 +145,6 @@ Contra PostgreSQL 16.10 real, no H2:
 
 ## Pendientes conocidos
 
-- **Las respuestas de seguridad no usan el envoltorio uniforme, y una petición sin sesión recibe 403
-  en vez de 401.** Sin un `AuthenticationEntryPoint` configurado, Spring Security responde 403 con
-  cuerpo vacío en ambos casos. Corresponde al alcance de la HU-21 (control de acceso).
+- Las respuestas de seguridad usan el envoltorio uniforme: `401 UNAUTHORIZED` para peticiones sin
+  autenticación y `403 ACCESS_DENIED` para usuarios autenticados sin permisos.
 - **`README_BASE_DE_DATOS.md`** todavía describe solo `app_user`.

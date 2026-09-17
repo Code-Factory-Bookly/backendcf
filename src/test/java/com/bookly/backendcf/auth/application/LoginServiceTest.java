@@ -22,7 +22,7 @@ class LoginServiceTest {
 
     @BeforeEach
     void setUp() {
-        account = new UserAccount("patient@example.com", new BCryptPasswordEncoder().encode("Valid1!pass"), "Patient One");
+        account = new UserAccount("customer@example.com", new BCryptPasswordEncoder().encode("Valid1!pass"), "Customer One");
         repository = (UserAccountRepository) Proxy.newProxyInstance(
                 UserAccountRepository.class.getClassLoader(),
                 new Class<?>[]{UserAccountRepository.class},
@@ -41,7 +41,7 @@ class LoginServiceTest {
 
     @Test
     void loginExitosoEntregaTokenYReiniciaContador() {
-        LoginResponse response = service.login(new LoginRequest(" PATIENT@EXAMPLE.COM ", "Valid1!pass"));
+        LoginResponse response = service.login(new LoginRequest(" CUSTOMER@EXAMPLE.COM ", "Valid1!pass"));
 
         assertNotNull(response.accessToken());
         assertEquals("Bearer", response.tokenType());
@@ -51,7 +51,7 @@ class LoginServiceTest {
     @Test
     void credencialesIncorrectasDevuelvenErrorYRegistranIntento() {
         assertThrows(InvalidCredentialsException.class,
-                () -> service.login(new LoginRequest("patient@example.com", "Wrong1!pass")));
+                () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
 
         assertEquals(1, account.getFailedLoginAttempts());
     }
@@ -60,15 +60,15 @@ class LoginServiceTest {
     void quintoIntentoFallidoBloqueaLaCuenta() {
         for (int attempt = 1; attempt <= 4; attempt++) {
             assertThrows(InvalidCredentialsException.class,
-                    () -> service.login(new LoginRequest("patient@example.com", "Wrong1!pass")));
+                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
         }
 
         AccountLockedException exception = assertThrows(AccountLockedException.class,
-                () -> service.login(new LoginRequest("patient@example.com", "Wrong1!pass")));
+                () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
 
         assertEquals(5, account.getFailedLoginAttempts());
         assertNotNull(exception.getLockedUntil());
         assertThrows(AccountLockedException.class,
-                () -> service.login(new LoginRequest("patient@example.com", "Valid1!pass")));
+                () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass")));
     }
 }

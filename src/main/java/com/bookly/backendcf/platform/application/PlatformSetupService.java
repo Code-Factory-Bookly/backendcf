@@ -8,6 +8,7 @@ import com.bookly.backendcf.platform.infrastructure.persistence.PlatformReposito
 import com.bookly.backendcf.platform.presentation.dto.PlatformSetupRequest;
 import com.bookly.backendcf.platform.presentation.dto.PlatformSetupResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +44,14 @@ public class PlatformSetupService {
             throw new PlatformAlreadyConfiguredException();
         }
 
-        Platform platform = platformRepository.save(new Platform(normalizeName(request.name())));
+        final Platform platform;
+        try {
+            // El índice único de platform((true)) es la autoridad ante dos aprovisionamientos
+            // simultáneos; flush traduce la violación dentro del caso de uso.
+            platform = platformRepository.saveAndFlush(new Platform(normalizeName(request.name())));
+        } catch (DataIntegrityViolationException exception) {
+            throw new PlatformAlreadyConfiguredException();
+        }
 
         UserAccount adminUser = userAccountRepository.save(new UserAccount(
                 normalizeEmail(request.adminEmail()),

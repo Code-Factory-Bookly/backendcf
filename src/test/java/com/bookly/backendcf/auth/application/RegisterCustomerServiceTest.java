@@ -43,7 +43,7 @@ class RegisterCustomerServiceTest {
     @Test
     void registroExitosoCreaLaCuentaConRolClienteYPasswordHasheado() {
         when(repository.existsByEmail("customer@example.com")).thenReturn(false);
-        when(repository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RegisterCustomerResponse response = service.register(
                 new RegisterCustomerRequest(" CUSTOMER@EXAMPLE.COM ", "Valid1!pass", "  Customer   One  "));
@@ -53,7 +53,7 @@ class RegisterCustomerServiceTest {
         assertEquals(UserRole.CUSTOMER, response.role());
 
         ArgumentCaptor<UserAccount> savedAccount = ArgumentCaptor.forClass(UserAccount.class);
-        verify(repository).save(savedAccount.capture());
+        verify(repository).saveAndFlush(savedAccount.capture());
         assertEquals("customer@example.com", savedAccount.getValue().getEmail());
         assertTrue(passwordEncoder.matches("Valid1!pass", savedAccount.getValue().getPasswordHash()));
     }
@@ -66,7 +66,7 @@ class RegisterCustomerServiceTest {
                 () -> service.register(new RegisterCustomerRequest(
                         "customer@example.com", "Valid1!pass", "Customer One")));
 
-        verify(repository, never()).save(any());
+        verify(repository, never()).saveAndFlush(any());
     }
 
     @Test

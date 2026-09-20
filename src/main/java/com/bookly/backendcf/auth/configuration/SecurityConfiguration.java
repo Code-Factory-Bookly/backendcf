@@ -43,6 +43,9 @@ public class SecurityConfiguration {
         .requestMatchers(HttpMethod.GET, "/api/v1/servicios", "/api/v1/servicios/**").permitAll()
         .requestMatchers("/api/v1/servicios/**").hasRole("ADMIN")
 
+        // Profesionales: solo ADMIN los registra y gestiona
+        .requestMatchers("/api/v1/profesionales/**").hasRole("ADMIN")
+
         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 

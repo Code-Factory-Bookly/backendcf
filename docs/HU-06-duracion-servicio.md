@@ -69,7 +69,7 @@ para dividir los horarios disponibles de los profesionales en bloques reservable
 > **Nota:** La implementación concreta depende de la HU-07 (gestión de agendas)
 > y la HU de reservas. Esta documentación define el contrato de uso del dato.
 
-## Migración de datos existentes
+## Integridad de datos
 
-`V6__validate_existing_durations.sql` corrige cualquier servicio con duración
-nula, cero, negativa o >480, asignándole 30 minutos como valor por defecto.
+La duración queda protegida por las validaciones del DTO y la restricción
+`CHECK` definida en la migración del catálogo de servicios.

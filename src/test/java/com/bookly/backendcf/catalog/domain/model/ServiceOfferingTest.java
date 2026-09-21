@@ -3,6 +3,7 @@ package com.bookly.backendcf.catalog.domain.model;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,11 +37,12 @@ class ServiceOfferingTest {
     void shouldUpdateDuration() {
         ServiceOffering offering = new ServiceOffering(
                 "Manicure", "Desc", "Belleza", 30, BigDecimal.valueOf(20000));
+        OffsetDateTime before = offering.getUpdatedAt();
 
         offering.update("Manicure", "Desc", "Belleza", 60, BigDecimal.valueOf(20000), null);
 
         assertEquals(60, offering.getDurationMinutes());
-        assertNotNull(offering.getUpdatedAt());
+        assertTrue(offering.getUpdatedAt().isAfter(before));
     }
 
     @Test

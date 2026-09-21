@@ -2,13 +2,14 @@ openapi: 3.0.3
 info:
   title: Bookly Backend API
   version: 1.0.0
-  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03 y HU-20.
+  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-20 y HU-22.
 servers:
   - url: http://localhost:8080/api/v1
 tags:
   - name: Auth
   - name: Platform
   - name: Services
+  - name: Professionals
 paths:
   /auth/register:
     post:
@@ -138,6 +139,31 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /profesionales:
+    post:
+      tags: [ Professionals ]
+      summary: Registrar profesional
+      description: >-
+        Crea la cuenta del profesional con rol PROFESSIONAL y su perfil con la especialidad, en una sola
+        operación. Solo puede usarlo un usuario con rol ADMIN (HU-22). Errores: 400 VALIDATION_ERROR,
+        401 UNAUTHORIZED, 403 ACCESS_DENIED y 409 EMAIL_ALREADY_REGISTERED.
+      operationId: createProfessional
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfessionalRequest' }
+      responses:
+        '201':
+          description: Profesional creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfessionalResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
 components:
   securitySchemes:
     bearerAuth:

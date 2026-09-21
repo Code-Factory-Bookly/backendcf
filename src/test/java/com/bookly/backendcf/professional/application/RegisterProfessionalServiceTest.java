@@ -19,7 +19,9 @@ import com.bookly.backendcf.professional.presentation.dto.ProfessionalResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.lang.reflect.Field;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,7 +53,13 @@ class RegisterProfessionalServiceTest {
     void registroExitosoCreaLaCuentaConRolProfesionalYElPerfilDeEspecialidad() {
         when(userAccountRepository.existsByEmail("sofia@example.com")).thenReturn(false);
         when(userAccountRepository.saveAndFlush(any(UserAccount.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    UserAccount account = invocation.getArgument(0);
+                    Field idField = UserAccount.class.getDeclaredField("id");
+                    idField.setAccessible(true);
+                    idField.set(account, UUID.randomUUID());
+                    return account;
+                });
         when(professionalRepository.saveAndFlush(any(Professional.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 

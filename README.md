@@ -4,15 +4,28 @@ Backend de la plataforma de reservas de servicios del caso 14 de CodeF@ctory. El
 
 ## Estado del Sprint 1
 
-Actualmente se encuentran implementados:
+Sprint 1 comprende 7 HU según el tablero real de Azure DevOps. Estado a 2026-09-21:
+
+**Mergeadas a `main`:**
 
 - HU-01: registro de cliente.
 - HU-02: catálogo de servicios con consulta pública y administración restringida a `ADMIN`.
 - HU-03: inicio de sesión seguro.
 - HU-20: configuración inicial de la plataforma, de un solo uso.
+- HU-21: control de acceso a recursos ajenos (`OwnershipGuard`) — mecanismo genérico de autorización por dueño de recurso, independiente de que exista todavía la entidad de reservas (HU-08).
+
+**Con PR abierto, pendientes de mergear:**
+
+- HU-06: configuración de duración estándar de servicios (PR #14).
+- HU-22: creación de especialistas y profesionales (PR #15).
+
+El estado detallado de cobertura de pruebas, Quality Gate de SonarCloud y riesgos por HU está en [README_QA.md](README_QA.md).
+
+Además:
+
 - API REST versionada bajo `/api/v1`.
 - Persistencia en PostgreSQL con JPA/Hibernate.
-- Migraciones de esquema administradas por Flyway (`V1` a `V5`).
+- Migraciones de esquema administradas por Flyway (`V1` a `V5` en `main`; `V6` para HU-22 vive en el PR #15 hasta que se mergee).
 - Roles unificados: `CUSTOMER`, `PROFESSIONAL` y `ADMIN`.
 - Contraseñas almacenadas mediante BCrypt.
 - Tokens Bearer firmados con HMAC-SHA256 y expiración configurable.
@@ -235,10 +248,11 @@ Después de 15 minutos se puede usar la contraseña correcta. El login exitoso r
 ./mvnw test
 ```
 
-La suite incluye prueba de contexto y pruebas unitarias para login exitoso, credenciales incorrectas y bloqueo al quinto intento. El análisis estático, la cobertura mínima del 65 %, CI/CD y pruebas de integración con PostgreSQL quedan como actividades de calidad a completar en el ciclo del proyecto.
+16 tests en `main` (login, registro de cliente, reglas de dominio de `UserAccount`, `OwnershipGuard` de HU-21 y el smoke test de contexto Spring). Sumando lo que está en PR abiertos sin mergear (HU-06, HU-22 y la cobertura de `JwtTokenService`), el total sube a 41. Análisis estático con SonarCloud ya corre en cada PR/push; el Quality Gate del proyecto completo sigue en `ERROR` por cobertura de código nuevo acumulado hasta que se mergeen esos PR. Detalle completo de trazabilidad HU → prueba, riesgos detectados y estado del pipeline en [README_QA.md](README_QA.md).
 
 ## Documentación relacionada
 
+- [Calidad y pruebas - Sprint 1](README_QA.md)
 - [Arquitectura de software - Sprint 1](README_ARQUITECTURA.md)
 - [Base de datos - Sprint 1](README_BASE_DE_DATOS.md)
 - [Contrato OpenAPI](docs/openapi.yaml)

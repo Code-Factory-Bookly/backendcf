@@ -1,4 +1,4 @@
-x# Arquitectura de software - Sprint 1
+# Arquitectura de software - Sprint 1
 
 ## 1. Propósito y alcance
 

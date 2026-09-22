@@ -229,6 +229,23 @@ components:
         - type: object
           properties:
             id: { type: string, format: uuid }
+    ProfessionalRequest:
+      type: object
+      required: [email, password, fullName, specialty]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, minLength: 8, maxLength: 64 }
+        fullName: { type: string, maxLength: 150 }
+        specialty: { type: string, maxLength: 100 }
+    ProfessionalResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        specialty: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
     ApiError:
       type: object
       required: [errorCode, message, details, traceId, timestamp]

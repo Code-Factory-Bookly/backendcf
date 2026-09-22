@@ -2,7 +2,7 @@
 
 ## 1. Propósito y alcance
 
-Este documento presenta el diseño lógico y físico implementado de Bookly para HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-20 (configuración inicial de la plataforma) y HU-22 (registro de profesionales). PostgreSQL es la fuente de verdad para las cuentas, los perfiles de profesionales, el catálogo, la plataforma, los roles y el estado de protección contra intentos fallidos.
+Este documento presenta el diseño lógico y físico implementado de Bookly para HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial de la plataforma) y HU-22 (registro de profesionales). PostgreSQL es la fuente de verdad para las cuentas, los perfiles de profesionales, el catálogo —incluida la duración de cada servicio—, la plataforma, los roles y el estado de protección contra intentos fallidos.
 
 El modelo está preparado para extenderse en los siguientes sprints con agendas y reservas. Las especialidades de HU-02 se representan inicialmente mediante `servicios.categoria`, de acuerdo con el [ADR-005](docs/ADR-005-alcance-HU-02.md); no existe una entidad independiente mientras no haya reglas que la justifiquen. La especialidad de un profesional (HU-22) sigue el mismo criterio: es un atributo de `profesionales.especialidad`.
 

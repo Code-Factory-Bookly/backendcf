@@ -66,14 +66,14 @@ Mecanismo genérico (`shared/security/OwnershipGuard`), independiente de HU-08 (
 | Correo ya registrado | `RegisterProfessionalServiceTest.registroConCorreoYaRegistradoRechazaLaSolicitud` | Cubierto |
 | Contraseña débil | `RegisterProfessionalServiceTest.registroConContrasenaDebilEsRechazadoPorLaValidacionDelContrato` | Cubierto |
 
-**Pendiente de mergear** — el código es de Elena (PR #15); el test se agregó directo a su rama (`feature/hu_22_create_professionals`) para destrabar el Quality Gate, que estaba en `ERROR` (18.8% de cobertura de código nuevo) antes de este test.
+Implementada y mergeada en el PR #15. La cobertura incluye registro exitoso, correo duplicado, contraseña débil y carrera de registro simultáneo.
 
 ### HU-02 / HU-06 — Catálogo de servicios y duración
 
 | HU | Prueba automatizada | Estado |
 |---|---|---|
 | HU-02 | Ninguna sobre `ServiceOfferingService` (la lógica de duplicado por nombre) | Sin cubrir |
-| HU-06 | `ServiceOfferingRequestValidationTest`, `ServiceOfferingTest` (PR #14, Miguel) | Cubierto (dominio + validación del DTO), **pendiente de mergear** |
+| HU-06 | `ServiceOfferingRequestValidationTest`, `ServiceOfferingTest` (PR #14, Miguel) | Cubierto (dominio + validación del DTO), implementado y mergeado |
 
 ### HU-20 — Configuración inicial de la plataforma
 
@@ -101,7 +101,7 @@ src/test/java/com/bookly/backendcf/
 └── BackendcfApplicationTests.java                       # smoke test de contexto Spring
 ```
 
-**16 tests en `main`**, todos en verde (`./mvnw test`). Sumando lo que está en PR abiertos sin mergear: **+4** en PR #15 (HU-22, `RegisterProfessionalServiceTest`), **+11** en PR #14 (HU-06: 7 en `ServiceOfferingRequestValidationTest` + 4 en `ServiceOfferingTest`) y **+10** en PR #18 (`JwtTokenServiceTest`, nuevo) — **41 tests en total** contando los tres PR sin mergear.
+La suite de pruebas incluye los escenarios de HU-06 (`ServiceOfferingRequestValidationTest` y `ServiceOfferingTest`), HU-22 (`RegisterProfessionalServiceTest` y `ProfessionalControllerSecurityTest`) y la cobertura de `JwtTokenService`. Estas pruebas forman parte del código integrado en la rama actual.
 
 Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler`, `PlatformSetupService` (HU-20), `ServiceOfferingService` (la lógica de duplicado por nombre de HU-02, distinta de lo que cubre el PR #14).
 
@@ -164,14 +164,14 @@ Actualizado con las 7 HU reales de Sprint 1:
 1. ~~`RegisterCustomerServiceTest`~~ — hecho (HU-01, 3 escenarios).
 2. ~~`UserAccountTest`~~ — hecho (6 pruebas de reglas de dominio).
 3. ~~`OwnershipGuardTest`~~ — hecho (HU-21, 3 escenarios, mecanismo genérico independiente de HU-08).
-4. ~~`RegisterProfessionalServiceTest`~~ — hecho (HU-22, 4 escenarios incluyendo la carrera de registro simultáneo), pusheado a la rama de Elena (PR #15), **pendiente de mergear**.
-5. ~~`ServiceOfferingTest` / `ServiceOfferingRequestValidationTest`~~ — hecho por Miguel (HU-06, PR #14), **pendiente de mergear**.
-6. ~~`JwtTokenServiceTest`~~ — hecho (10 escenarios: firma/payload alterado, expiración, secreto distinto, estructura inválida, validación del constructor). Era el punto de mayor riesgo real del código (sección 6). **PR #18 abierto, Quality Gate `OK`, pendiente de mergear.**
+4. ~~`RegisterProfessionalServiceTest`~~ — hecho e integrado (HU-22, 4 escenarios incluyendo la carrera de registro simultáneo).
+5. ~~`ServiceOfferingTest` / `ServiceOfferingRequestValidationTest`~~ — hecho e integrado (HU-06).
+6. ~~`JwtTokenServiceTest`~~ — hecho e integrado (10 escenarios: firma/payload alterado, expiración, secreto distinto, estructura inválida y validación del constructor).
 7. **`ServiceOfferingService`** (HU-02) — falta cubrir la lógica de duplicado por nombre (`existsByNameIgnoreCase`), distinta de lo que ya cubre el PR #14.
 8. **`PlatformSetupServiceTest`** (HU-20) — sigue sin ningún test.
 9. **`JwtAuthenticationFilterTest`** y **`AuthControllerTest`** — sin cambios, siguen pendientes.
 
-Con los puntos 1-6 resueltos, el Quality Gate de SonarCloud del proyecto (65.2% de cobertura de código nuevo, sección 7.3) va a subir apenas se mergeen los PR #14, #15 y #18 — son los que más cobertura nueva aportan de lo que queda pendiente.
+Los puntos 1-6 están resueltos e integrados. Las pruebas pendientes corresponden a cobertura adicional de componentes que no bloquean la implementación funcional de las HU.
 
 ## 9. Ejecución local
 
@@ -195,7 +195,7 @@ export SONAR_TOKEN=$(cat ~/.sonar_token)
 
 ## 10. Pendientes de evolución
 
-Para cerrar Sprint 1: mergear PR #14 (HU-06), #15 (HU-22, con el test ya agregado) y #18 (`JwtTokenServiceTest`) para subir el Quality Gate de `main`, y corregir el patrón de carrera check-then-act en `RegisterCustomerService`/`PlatformSetupService`/`ServiceOfferingService` (usando como referencia la corrección que Elena ya hizo bien en `RegisterProfessionalService`).
+Para continuar el cierre de Sprint 1: mantener la cobertura y corregir el patrón de carrera check-then-act en `RegisterCustomerService`/`PlatformSetupService`/`ServiceOfferingService` (usando como referencia la corrección ya aplicada en `RegisterProfessionalService`). HU-06, HU-22 y la cobertura de `JwtTokenService` ya están integradas.
 
 **Resuelto el 2026-09-21:** la anomalía de HU-21 en el tablero de Azure DevOps (work item 32) — estaba sin Sprint asignado pese a estar mergeada desde el PR #13. Ya se movió a `Sprint 1` vía API. El `State` se dejó en `Active` a propósito (no se cerró unilateralmente el work item de David; falta que él lo pase a `Closed`).
 

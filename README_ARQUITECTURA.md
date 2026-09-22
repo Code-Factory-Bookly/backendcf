@@ -2,7 +2,7 @@
 
 ## 1. Propósito y alcance
 
-Este documento describe la arquitectura implementada del backend de Bookly para el Sprint 1. Su alcance incluye el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-20 (configuración inicial), HU-22 (registro de profesionales), la persistencia y el despliegue con Docker Compose.
+Este documento describe la arquitectura implementada del backend de Bookly para el Sprint 1. Su alcance incluye el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial), HU-22 (registro de profesionales), la persistencia y el despliegue con Docker Compose.
 
 La solución se mantiene como un monolito modular porque el alcance actual es pequeño, existe un único dominio principal y el equipo necesita reducir la complejidad operativa. La separación por módulos permite evolucionar a nuevos dominios sin iniciar prematuramente una arquitectura de microservicios.
 
@@ -32,7 +32,8 @@ El cliente HTTP representa Postman durante las pruebas del Sprint 1 y posteriorm
 
 HU-02 se implementa como un catálogo independiente de servicios. La categoría representa la
 especialidad en este alcance; no se crea una entidad independiente. HU-20 concentra el nombre y la
-configuración general de la plataforma.
+configuración general de la plataforma. HU-06 utiliza el campo `durationMinutes` del catálogo para
+validar y conservar una duración entera entre 1 y 480 minutos.
 
 HU-22 registra a los profesionales como una cuenta con rol `PROFESSIONAL` más un perfil con su especialidad
 (`profesionales`, relación 1 a 1 con `app_user`). Solo el administrador los crea. En este alcance no se
@@ -109,7 +110,7 @@ flowchart LR
 | `UserAccountRepository` | Acceso JPA a `app_user` por UUID y email |
 | `GlobalExceptionHandler` | Contrato uniforme para errores de validación, registro y autenticación |
 
-### Componentes de HU-02, HU-20 y HU-22
+### Componentes de HU-02, HU-06, HU-20 y HU-22
 
 | Módulo | Responsabilidad |
 |---|---|

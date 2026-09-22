@@ -2,7 +2,7 @@
 
 ## 1. Propósito y alcance
 
-Este documento describe la arquitectura implementada del backend de Bookly para el Sprint 1. Su alcance incluye el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-20 (configuración inicial), la persistencia y el despliegue con Docker Compose.
+Este documento describe la arquitectura implementada del backend de Bookly para el Sprint 1. Su alcance incluye el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-20 (configuración inicial), HU-22 (registro de profesionales), la persistencia y el despliegue con Docker Compose.
 
 La solución se mantiene como un monolito modular porque el alcance actual es pequeño, existe un único dominio principal y el equipo necesita reducir la complejidad operativa. La separación por módulos permite evolucionar a nuevos dominios sin iniciar prematuramente una arquitectura de microservicios.
 
@@ -34,6 +34,12 @@ HU-02 se implementa como un catálogo independiente de servicios. La categoría 
 especialidad en este alcance; no se crea una entidad independiente. HU-20 concentra el nombre y la
 configuración general de la plataforma.
 
+HU-22 registra a los profesionales como una cuenta con rol `PROFESSIONAL` más un perfil con su especialidad
+(`profesionales`, relación 1 a 1 con `app_user`). Solo el administrador los crea. En este alcance no se
+configuran agendas (HU-04 y HU-05), no se asignan a servicios y no hay invitación por correo: la contraseña
+inicial la define el administrador. La restricción a su propia agenda se aplicará con `OwnershipGuard` en la
+HU de agenda.
+
 ## 4. Vista de contenedores C4
 
 ```mermaid
@@ -41,7 +47,7 @@ flowchart TB
     Client[Cliente REST]
     subgraph Docker Compose
       API[Backend Bookly<br/>Spring Boot / Java 17]
-      DB[(PostgreSQL 16<br/>app_user / platform / servicios)]
+      DB[(PostgreSQL 16<br/>app_user / platform / servicios / profesionales)]
     end
     Client -->|REST /api/v1| API
     API -->|Spring Data JPA| DB
@@ -103,7 +109,7 @@ flowchart LR
 | `UserAccountRepository` | Acceso JPA a `app_user` por UUID y email |
 | `GlobalExceptionHandler` | Contrato uniforme para errores de validación, registro y autenticación |
 
-### Componentes de HU-02 y HU-20
+### Componentes de HU-02, HU-20 y HU-22
 
 | Módulo | Responsabilidad |
 |---|---|
@@ -112,6 +118,11 @@ flowchart LR
 | `ServiceOfferingRepository` | Persistencia y unicidad lógica del nombre del servicio |
 | `PlatformSetupController` | Aprovisionamiento único mediante `POST /api/v1/platform/setup` |
 | `PlatformSetupService` | Validación de la configuración y traducción de concurrencia a `409` |
+| `ProfessionalController` | Alta de profesionales mediante `POST /api/v1/profesionales`, exclusiva de `ADMIN` |
+| `RegisterProfessionalService` | Normalización, creación de la cuenta `PROFESSIONAL` y su perfil en una transacción, y traducción del correo duplicado a `409` |
+| `ProfessionalRepository` | Persistencia del perfil en `profesionales`, con el mismo `id` que la cuenta |
+
+
 
 ## 7. Flujo de login
 
@@ -139,11 +150,38 @@ sequenceDiagram
     end
 ```
 
+### Flujo de registro de profesionales
+
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant API as ProfessionalController
+    participant Reg as RegisterProfessionalService
+    participant DB as PostgreSQL
+
+    Admin->>API: POST /profesionales
+    alt Sin token, o token inválido o vencido
+        API-->>Admin: 401 UNAUTHORIZED
+    else Rol distinto de ADMIN
+        API-->>Admin: 403 ACCESS_DENIED
+    else Rol ADMIN
+        API->>Reg: ProfessionalRequest validado
+        Reg->>DB: Buscar por email normalizado
+        alt Correo ya registrado
+            Reg-->>API: 409 EMAIL_ALREADY_REGISTERED
+        else Correo disponible
+            Reg->>DB: Guardar cuenta PROFESSIONAL y perfil en una transacción
+            DB-->>Reg: Cuenta y perfil confirmados
+            Reg-->>API: 201 ProfessionalResponse
+        end
+    end
+```
+
 ## 8. Seguridad implementada y pendientes
 
-Implementado: BCrypt, política de contraseña, normalización de email, respuestas genéricas ante credenciales inválidas, bloqueo temporal, token firmado y expiración, API stateless, validación de payloads y secretos configurables por ambiente. `JWT_SECRET` es obligatorio, persistente y no se genera automáticamente al iniciar. Las solicitudes sin autenticación responden `401 UNAUTHORIZED` y los usuarios autenticados sin permisos responden `403 ACCESS_DENIED`, ambos con el contrato de error uniforme.
+Implementado: BCrypt, política de contraseña, normalización de email, respuestas genéricas ante credenciales inválidas, bloqueo temporal, token firmado y expiración, API stateless, validación de payloads y secretos configurables por ambiente. `JWT_SECRET` es obligatorio, persistente y no se genera automáticamente al iniciar. Las solicitudes sin autenticación responden `401 UNAUTHORIZED` y los usuarios autenticados sin permisos responden `403 ACCESS_DENIED`, ambos con el contrato de error uniforme. El alta de profesionales (`/api/v1/profesionales`) solo la puede ejecutar `ADMIN`.
 
-Pendiente para completar los lineamientos avanzados: MFA para administración, revocación y rotación de tokens, cookies `HttpOnly`/`Secure` si el cliente las requiere, CORS restringido, rate limiting por IP/cuenta, logs estructurados de eventos de seguridad y SCA/SAST/DAST.
+Pendiente para completar los lineamientos avanzados: MFA para administración, revocación y rotación de tokens, cookies `HttpOnly`/`Secure` si el cliente las requiere, CORS restringido, rate limiting por IP/cuenta, logs estructurados de eventos de seguridad, invitación por correo o cambio de la contraseña inicial de los profesionales y SCA/SAST/DAST.
 
 ## 9. Decisiones arquitectónicas (ADR)
 

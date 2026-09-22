@@ -68,7 +68,19 @@ Mecanismo genérico (`shared/security/OwnershipGuard`), independiente de HU-08 (
 
 Implementada y mergeada en el PR #15. La cobertura incluye registro exitoso, correo duplicado, contraseña débil y carrera de registro simultáneo.
 
-### HU-02 / HU-06 — Catálogo de servicios y duración
+### HU-02 — Configuración del catálogo de servicios
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Registro correcto de un servicio en el catálogo | `ServiceOfferingServiceTest.registroCorrectoGuardaElServicioEnElCatalogoConEstadoActivo`, `ServiceOfferingControllerTest.registroCorrectoDevuelve201ConElServicioCreado` | Cubierto |
+| Intento de registrar un servicio con datos obligatorios faltantes | `ServiceOfferingRequestValidationTest.shouldRejectBlankName/shouldRejectNullName/shouldRejectBlankCategory/shouldRejectNullCategory/shouldRejectNullPrice/shouldRejectZeroPrice`, `ServiceOfferingControllerTest.registroConCamposObligatoriosFaltantesDevuelve400ConLosCamposPendientes` | Cubierto |
+| Consulta pública del catálogo | `ServiceOfferingServiceTest.consultaSinFiltroDeCategoriaDevuelveTodoElCatalogo/consultaConCategoriaFiltraPorEsaCategoria/consultaConCategoriaEnBlancoSeComportaComoSinFiltro`, `ServiceOfferingControllerTest.consultaDelCatalogoDevuelve200ConLosServiciosDisponibles/consultaDelCatalogoConFiltroDeCategoriaDevuelve200ConLosServiciosDeEsaCategoria` | Cubierto |
+
+`ServiceOfferingServiceTest` (Mockito) también cubre el rechazo por nombre duplicado (`registroConNombreYaExistenteEnElCatalogoEsRechazado`), lógica de negocio detrás de la unicidad del catálogo que no está descrita literalmente en el Gherkin. `ServiceOfferingControllerTest` (`@WebMvcTest`) suma el caso de contrato HTTP 409 `SERVICE_ALREADY_EXISTS` (`registroConNombreDuplicadoDevuelve409ConErrorCodeServiceAlreadyExists`).
+
+**Pendiente conocido, no cubierto por diseño (ver sección 6):** `ServiceOfferingService.create` sigue con el patrón check-then-act (`existsByNameIgnoreCase` → `save()` sin atomicidad) sin corregir; no se agregó test de condición de carrera para HU-02 todavía.
+
+### HU-06 — Configuración de duración estándar de servicios
 
 | HU | Prueba automatizada | Estado |
 |---|---|---|
@@ -94,16 +106,18 @@ HU-20 tiene sus 4 escenarios Gherkin cubiertos entre `PlatformSetupServiceTest` 
 
 ```text
 src/test/java/com/bookly/backendcf/
-├── auth/application/LoginServiceTest.java              # 3 escenarios, HU-03 completa
-├── auth/application/RegisterCustomerServiceTest.java   # 3 escenarios, HU-01 completa (Mockito)
-├── auth/domain/model/UserAccountTest.java              # 6 pruebas de reglas de dominio
-├── shared/security/OwnershipGuardTest.java             # 3 escenarios, HU-21 completa (Mockito)
-└── BackendcfApplicationTests.java                       # smoke test de contexto Spring
+├── auth/application/LoginServiceTest.java                    # 3 escenarios, HU-03 completa
+├── auth/application/RegisterCustomerServiceTest.java         # 3 escenarios, HU-01 completa (Mockito)
+├── auth/domain/model/UserAccountTest.java                    # 6 pruebas de reglas de dominio
+├── catalog/application/ServiceOfferingServiceTest.java       # 5 escenarios, HU-02 (servicio, Mockito)
+├── catalog/presentation/ServiceOfferingControllerTest.java   # 5 escenarios, HU-02 (contrato HTTP, @WebMvcTest)
+├── shared/security/OwnershipGuardTest.java                   # 3 escenarios, HU-21 completa (Mockito)
+└── BackendcfApplicationTests.java                             # smoke test de contexto Spring
 ```
 
-La suite de pruebas incluye los escenarios de HU-06 (`ServiceOfferingRequestValidationTest` y `ServiceOfferingTest`), HU-22 (`RegisterProfessionalServiceTest` y `ProfessionalControllerSecurityTest`) y la cobertura de `JwtTokenService`. Estas pruebas forman parte del código integrado en la rama actual.
+**26 tests en `main`** (16 previos + 10 nuevos de HU-02: 5 en `ServiceOfferingServiceTest` + 5 en `ServiceOfferingControllerTest`), todos en verde (`./mvnw test`). Sumando lo que está en PR abiertos sin mergear: **+4** en PR #15 (HU-22, `RegisterProfessionalServiceTest`), **+11** en PR #14 (HU-06: 7 en `ServiceOfferingRequestValidationTest` + 4 en `ServiceOfferingTest`) y **+10** en PR #18 (`JwtTokenServiceTest`, nuevo) — **51 tests en total** contando los tres PR sin mergear.
 
-Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler`, `PlatformSetupService` (HU-20), `ServiceOfferingService` (la lógica de duplicado por nombre de HU-02, distinta de lo que cubre el PR #14).
+Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler`, `PlatformSetupService` (HU-20).
 
 `LoginServiceTest` simula el repositorio con un `Proxy` de reflexión hecho a mano en vez de Mockito. El resto de los tests nuevos (`RegisterCustomerServiceTest`, `OwnershipGuardTest`, `RegisterProfessionalServiceTest` del PR #15, y `JwtTokenServiceTest` del PR #18) sí usan Mockito o son de unidad plana sin mocks — conviene migrar `LoginServiceTest` al mismo patrón cuando se retome.
 

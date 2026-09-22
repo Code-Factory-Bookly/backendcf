@@ -186,6 +186,13 @@ components:
         fullName: { type: string }
         role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
         createdAt: { type: string, format: date-time }
+    LoginUserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
     LoginRequest:
       type: object
       required: [email, password]
@@ -198,7 +205,7 @@ components:
         accessToken: { type: string }
         tokenType: { type: string, example: Bearer }
         expiresIn: { type: integer, format: int64 }
-        user: { $ref: '#/components/schemas/RegisterCustomerResponse' }
+        user: { $ref: '#/components/schemas/LoginUserSummary' }
     PlatformSetupRequest:
       type: object
       required: [name, adminEmail, adminPassword, adminFullName]

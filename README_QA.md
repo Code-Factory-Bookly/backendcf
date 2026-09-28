@@ -27,7 +27,7 @@ Según `Lineamientos.md`, secciones 3.5, 7.2 y 9.1:
 | Sprint | Entregable exigido | Estado en `backendcf` |
 |---|---|---|
 | 1 | Plan de calidad y pruebas; Gherkin para HU prioritarias | Gherkin completo en `HU_Reservas_Empresa_Unica.md` (22 HU, sincronizado contra el tablero real). Este documento cubre el plan de pruebas. |
-| 2 | Registro de defectos; SonarCloud activo; cobertura medida; pruebas con patrón AAA | Pipeline y JaCoCo agregados (sección 7); **bloqueo de SonarCloud ya resuelto** (ver sección 7.3) — el análisis corre real en cada PR/push. Quality Gate del proyecto (`branch=main`) en `ERROR` por cobertura de código nuevo acumulado (65.2% vs 80% que exige el gate por defecto de SonarCloud, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo) |
+| 2 | Registro de defectos; SonarCloud activo; cobertura medida; pruebas con patrón AAA | Pipeline y JaCoCo agregados (sección 7); **bloqueo de SonarCloud ya resuelto** (ver sección 7.3) — el análisis corre real en cada PR/push. Quality Gate del proyecto (`branch=main`) en **`OK`**, 92.6% de cobertura de código nuevo (vs 80% que exige el gate por defecto de SonarCloud, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo) |
 | 3 | Automatización de criterios de aceptación; ejecución E2E | No iniciado — depende de que Sprint 1 y 2 cierren cobertura unitaria primero |
 
 ## 4. Trazabilidad HU → Gherkin → prueba automatizada
@@ -89,10 +89,6 @@ Implementada y mergeada en el PR #15. La cobertura incluye registro exitoso, cor
 
 ### HU-20 — Configuración inicial de la plataforma
 
-Sin test automatizado — `PlatformSetupService` sigue sin cobertura, verificación solo manual.
-
-### HU-20 — Configuración inicial de la plataforma
-
 | Escenario Gherkin | Prueba automatizada | Estado |
 |---|---|---|
 | Aprovisionamiento exitoso | `PlatformSetupServiceTest.aprovisionamientoExitosoCreaPlataformaYAdminConRolAdmin`, `PlatformSetupControllerTest.aprovisionamientoExitosoDevuelve201ConElIdentificadorDeLaPlataforma` | Cubierto |
@@ -106,18 +102,26 @@ HU-20 tiene sus 4 escenarios Gherkin cubiertos entre `PlatformSetupServiceTest` 
 
 ```text
 src/test/java/com/bookly/backendcf/
-├── auth/application/LoginServiceTest.java                    # 3 escenarios, HU-03 completa
-├── auth/application/RegisterCustomerServiceTest.java         # 3 escenarios, HU-01 completa (Mockito)
-├── auth/domain/model/UserAccountTest.java                    # 6 pruebas de reglas de dominio
-├── catalog/application/ServiceOfferingServiceTest.java       # 5 escenarios, HU-02 (servicio, Mockito)
-├── catalog/presentation/ServiceOfferingControllerTest.java   # 5 escenarios, HU-02 (contrato HTTP, @WebMvcTest)
-├── shared/security/OwnershipGuardTest.java                   # 3 escenarios, HU-21 completa (Mockito)
-└── BackendcfApplicationTests.java                             # smoke test de contexto Spring
+├── auth/application/LoginServiceTest.java                          # 3,  HU-03
+├── auth/application/RegisterCustomerServiceTest.java               # 3,  HU-01 (Mockito)
+├── auth/domain/model/UserAccountTest.java                          # 6,  reglas de dominio
+├── auth/security/JwtTokenServiceTest.java                          # 10, riesgo JWT (firma/expiración/estructura)
+├── catalog/application/ServiceOfferingServiceTest.java             # 5,  HU-02 (servicio, Mockito)
+├── catalog/domain/model/ServiceOfferingTest.java                   # 10, HU-06 (dominio/duración)
+├── catalog/presentation/ServiceOfferingControllerTest.java         # 5,  HU-02 (contrato HTTP, @WebMvcTest)
+├── catalog/presentation/dto/ServiceOfferingRequestValidationTest.java # 14, HU-06 (validación del DTO)
+├── platform/application/PlatformSetupServiceTest.java              # 4,  HU-20 (servicio, Mockito)
+├── platform/presentation/PlatformSetupControllerTest.java          # 3,  HU-20 (contrato HTTP, @WebMvcTest)
+├── platform/presentation/dto/PlatformSetupRequestValidationTest.java # 3, HU-20 (validación del DTO)
+├── professional/application/RegisterProfessionalServiceTest.java   # 4,  HU-22 (servicio, Mockito)
+├── professional/presentation/ProfessionalControllerSecurityTest.java # 3, HU-22 (contrato HTTP/seguridad)
+├── shared/security/OwnershipGuardTest.java                         # 3,  HU-21 (Mockito)
+└── BackendcfApplicationTests.java                                   # 1,  smoke test de contexto Spring
 ```
 
-**26 tests en `main`** (16 previos + 10 nuevos de HU-02: 5 en `ServiceOfferingServiceTest` + 5 en `ServiceOfferingControllerTest`), todos en verde (`./mvnw test`). Sumando lo que está en PR abiertos sin mergear: **+4** en PR #15 (HU-22, `RegisterProfessionalServiceTest`), **+11** en PR #14 (HU-06: 7 en `ServiceOfferingRequestValidationTest` + 4 en `ServiceOfferingTest`) y **+10** en PR #18 (`JwtTokenServiceTest`, nuevo) — **51 tests en total** contando los tres PR sin mergear.
+**77 tests en `main`, todos en verde** (`./mvnw test`, verificado el 2026-09-22). Las 7 HU de Sprint 1 están mergeadas — ya no hay PR pendientes que sumar aparte.
 
-Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler`, `PlatformSetupService` (HU-20).
+Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler` — son los únicos tres componentes de Sprint 1 sin cobertura (`PlatformSetupService`/HU-20 ya se cubrió, ver arriba).
 
 `LoginServiceTest` simula el repositorio con un `Proxy` de reflexión hecho a mano en vez de Mockito. El resto de los tests nuevos (`RegisterCustomerServiceTest`, `OwnershipGuardTest`, `RegisterProfessionalServiceTest` del PR #15, y `JwtTokenServiceTest` del PR #18) sí usan Mockito o son de unidad plana sin mocks — conviene migrar `LoginServiceTest` al mismo patrón cuando se retome.
 
@@ -161,7 +165,9 @@ https://sonarcloud.io/dashboard?id=Code-Factory-Bookly_backendcf&branch=main
 
 `sonar.organization` (`code-factory-bookly`) y `sonar.projectKey` (`Code-Factory-Bookly_backendcf`) en `pom.xml` están confirmados correctos.
 
-**Nota sobre `continue-on-error` en el paso de Sonar:** el PR #6 (Copilot) lo agregó como parche temporal mientras el bloqueo estaba activo. Se intentó sacar (PR #11) pero se cerró sin mergear a pedido del equipo — **sigue en `ci.yml` a propósito**. Esto significa que hoy un PR puede mostrarse "verde" en GitHub aunque el Quality Gate real de SonarCloud esté en rojo — **siempre verificar el gate real** (sección siguiente), no solo el check de GitHub.
+**Nota sobre `continue-on-error` en el paso de Sonar:** el PR #6 (Copilot) lo agregó como parche temporal mientras el bloqueo estaba activo. Se intentó sacar (PR #11) pero se cerró sin mergear a pedido del equipo — **sigue en `ci.yml` a propósito**. Esto significa que hoy un PR puede mostrarse "verde" en GitHub aunque el Quality Gate real de SonarCloud esté en rojo — **siempre verificar el gate real** (sección siguiente), no solo el check de GitHub. Nota que solo aplica en `pull_request`; en push a `main` el paso de Sonar sí puede tumbar el job entero (pasó exactamente eso el 22/09, ver el incidente de abajo).
+
+**Incidente del 22/09 — `SONAR_TOKEN` rechazado, ya resuelto:** entre el merge del PR #15 (00:48) y el PR #22 (05:12), las 8 corridas de CI en `main` fallaron con `HTTP 403 Forbidden. Please check ... SONAR_TOKEN` — el token había quedado inválido. `Compilar` y `Tests y cobertura` seguían pasando bien; solo el análisis de Sonar se caía. Se regeneró el token en SonarCloud y se actualizó el secreto en GitHub (17:43); se reintentó la corrida (`gh run rerun`, sin necesitar un commit nuevo) y terminó en verde.
 
 **Estado real del Quality Gate hoy** (verificado vía API pública de SonarCloud, no solo el checkmark):
 
@@ -169,7 +175,7 @@ https://sonarcloud.io/dashboard?id=Code-Factory-Bookly_backendcf&branch=main
 GET https://sonarcloud.io/api/qualitygates/project_status?projectKey=Code-Factory-Bookly_backendcf&branch=main
 ```
 
-`branch=main`: `status: ERROR` — `new_coverage: 65.2%` vs `80%` exigido (el gate por defecto de SonarCloud mide cobertura de *código nuevo* desde la versión anterior, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo). El resto de las condiciones (confiabilidad, seguridad, mantenibilidad, duplicación, hotspots) están en verde.
+`branch=main`: **`status: OK`** — `new_coverage: 92.6%` vs `80%` exigido (el gate por defecto de SonarCloud mide cobertura de *código nuevo*, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo). Reliability, security, maintainability, duplicación y hotspots también en verde. Análisis corrido el 2026-09-22 sobre el commit `1be78fd` (el más reciente, con las 7 HU ya mergeadas).
 
 ## 8. Pruebas pendientes para cerrar Sprint 1
 
@@ -181,11 +187,11 @@ Actualizado con las 7 HU reales de Sprint 1:
 4. ~~`RegisterProfessionalServiceTest`~~ — hecho e integrado (HU-22, 4 escenarios incluyendo la carrera de registro simultáneo).
 5. ~~`ServiceOfferingTest` / `ServiceOfferingRequestValidationTest`~~ — hecho e integrado (HU-06).
 6. ~~`JwtTokenServiceTest`~~ — hecho e integrado (10 escenarios: firma/payload alterado, expiración, secreto distinto, estructura inválida y validación del constructor).
-7. **`ServiceOfferingService`** (HU-02) — falta cubrir la lógica de duplicado por nombre (`existsByNameIgnoreCase`), distinta de lo que ya cubre el PR #14.
-8. **`PlatformSetupServiceTest`** (HU-20) — sigue sin ningún test.
-9. **`JwtAuthenticationFilterTest`** y **`AuthControllerTest`** — sin cambios, siguen pendientes.
+7. ~~`ServiceOfferingService` (HU-02)~~ — hecho e integrado; `registroConNombreYaExistenteEnElCatalogoEsRechazado` cubre el duplicado por nombre (sección 4).
+8. ~~`PlatformSetupServiceTest` (HU-20)~~ — hecho e integrado (10 tests entre servicio, controlador y validación del DTO, sección 4).
+9. **`JwtAuthenticationFilterTest`**, **`AuthControllerTest`** y **`GlobalExceptionHandlerTest`** — únicos componentes de Sprint 1 sin test todavía, sin cambios.
 
-Los puntos 1-6 están resueltos e integrados. Las pruebas pendientes corresponden a cobertura adicional de componentes que no bloquean la implementación funcional de las HU.
+Las 7 HU de Sprint 1 tienen cobertura automatizada completa. Lo único pendiente (punto 9) es cobertura adicional de componentes transversales que no bloquean la implementación funcional de ninguna HU.
 
 ## 9. Ejecución local
 

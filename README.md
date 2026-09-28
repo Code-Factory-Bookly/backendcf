@@ -1,4 +1,4 @@
-# Bookly Backend
+# EAV-10: Caso 14- Plataforma de Reservas de Servicios
 
 Backend de la plataforma de reservas de servicios del caso 14 de CodeF@ctory. El sistema permite gestionar usuarios y autenticación para que clientes, profesionales y administradores puedan acceder posteriormente a reservas, agendas y herramientas de gestión.
 

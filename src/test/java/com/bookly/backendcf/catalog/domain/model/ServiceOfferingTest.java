@@ -34,10 +34,13 @@ class ServiceOfferingTest {
 
     @Test
     @DisplayName("actualizar duración de un servicio existente")
-    void shouldUpdateDuration() {
+    void shouldUpdateDuration() throws InterruptedException {
         ServiceOffering offering = new ServiceOffering(
                 "Manicure", "Desc", "Belleza", 30, BigDecimal.valueOf(20000));
         OffsetDateTime before = offering.getUpdatedAt();
+        // OffsetDateTime.now() puede devolver el mismo instante en dos llamadas seguidas
+        // si la JVM ya esta "caliente"; sin esta pausa el isAfter de abajo es flaky.
+        Thread.sleep(5);
 
         offering.update("Manicure", "Desc", "Belleza", 60, BigDecimal.valueOf(20000), null);
 

@@ -68,7 +68,7 @@ public class WeeklyScheduleService {
 
         for (DayOfWeek day : DayOfWeek.values()) {
             List<SlotRequest> daySlots = slots.stream()
-                    .filter(slot -> slot.dayOfWeek() == day)
+                    .filter(slot -> day.equals(slot.dayOfWeek()))
                     .sorted(Comparator.comparing(SlotRequest::startTime))
                     .toList();
             for (int i = 1; i < daySlots.size(); i++) {

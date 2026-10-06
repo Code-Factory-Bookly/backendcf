@@ -198,6 +198,55 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+
+  /horarios/{professionalId}:
+    parameters:
+      - name: professionalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [ Schedule ]
+      summary: Consultar horario semanal del profesional
+      description: >-
+        Devuelve las franjas de atención del profesional. Solo el propio profesional o un ADMIN (HU-04).
+        Errores: 401 UNAUTHORIZED, 403 ACCESS_DENIED y 404 PROFESSIONAL_NOT_FOUND.
+      operationId: getSchedule
+      security: [ { bearerAuth: [ ] } ]
+      responses:
+        '200':
+          description: Horario del profesional
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    put:
+      tags: [ Schedule ]
+      summary: Reemplazar horario semanal del profesional
+      description: >-
+        Reemplaza todas las franjas del profesional en una sola operación. Rechaza franjas con hora fin
+        anterior o igual a la de inicio, y franjas que se superponen el mismo día; la respuesta 409
+        SCHEDULE_CONFLICT indica cada conflicto en details (HU-04). Franjas contiguas son válidas.
+      operationId: replaceSchedule
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleRequest' }
+      responses:
+        '200':
+          description: Horario guardado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -205,6 +254,45 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    RoleAssignmentRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        specialty: { type: string, maxLength: 100 }
+    RoleAssignmentResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+    ProfessionalRequest:
+      type: object
+      required: [email, password, fullName, specialty]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, minLength: 8, maxLength: 64 }
+        fullName: { type: string, maxLength: 150 }
+        specialty: { type: string, maxLength: 100 }
+    ProfessionalResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        specialty: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
+    ApiError:
+      type: object
+      required: [errorCode, message, details, traceId, timestamp]
+      properties:
+        errorCode: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: { type: string } }
+        traceId: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
     RegisterCustomerRequest:
       type: object
       required: [email, password, fullName]
@@ -270,19 +358,27 @@ components:
         - type: object
           properties:
             id: { type: string, format: uuid }
-    RoleAssignmentRequest:
+    ScheduleRequest:
       type: object
-      required: [role]
+      required: [slots]
       properties:
-        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
-        specialty: { type: string, maxLength: 100 }
-    RoleAssignmentResponse:
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleSlot' }
+    ScheduleSlot:
+      type: object
+      required: [dayOfWeek, startTime, endTime]
+      properties:
+        dayOfWeek: { type: string, enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY] }
+        startTime: { type: string, format: time, example: '08:00' }
+        endTime: { type: string, format: time, example: '12:00' }
+    ScheduleResponse:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        fullName: { type: string }
-        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        professionalId: { type: string, format: uuid }
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleSlot' }
     ProfessionalRequest:
       type: object
       required: [email, password, fullName, specialty]

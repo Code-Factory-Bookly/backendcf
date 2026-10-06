@@ -57,6 +57,8 @@ public class SecurityConfiguration {
 
         // Asignación de roles: solo ADMIN (HU-17)
         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+        // Horario semanal: solo el profesional dueño (o ADMIN) lo consulta y modifica
+        .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
 
         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);

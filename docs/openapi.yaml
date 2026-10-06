@@ -164,6 +164,40 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /usuarios/{userId}/rol:
+    put:
+      tags: [ Users ]
+      summary: Asignar rol a un usuario
+      description: >-
+        Solo ADMIN. Cambia el rol de la cuenta entre CUSTOMER, PROFESSIONAL y ADMIN (HU-17). Para
+        asignar PROFESSIONAL a una cuenta sin perfil se requiere la especialidad y se crea el perfil.
+        Una cuenta con perfil profesional no puede cambiar a otro rol (409 ROLE_CHANGE_CONFLICT). El
+        token que ya emitió el usuario conserva el rol anterior hasta que expire.
+        Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 403 ACCESS_DENIED, 404 USER_NOT_FOUND y 409
+        ROLE_CHANGE_CONFLICT o SPECIALTY_REQUIRED.
+      operationId: assignUserRole
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleAssignmentRequest' }
+      responses:
+        '200':
+          description: Rol asignado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoleAssignmentResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -236,6 +270,19 @@ components:
         - type: object
           properties:
             id: { type: string, format: uuid }
+    RoleAssignmentRequest:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        specialty: { type: string, maxLength: 100 }
+    RoleAssignmentResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
     ProfessionalRequest:
       type: object
       required: [email, password, fullName, specialty]

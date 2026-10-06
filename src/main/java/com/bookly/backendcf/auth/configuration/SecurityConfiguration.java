@@ -55,6 +55,9 @@ public class SecurityConfiguration {
         // Profesionales: solo ADMIN los registra y gestiona
         .requestMatchers("/api/v1/profesionales/**").hasRole("ADMIN")
 
+        // Asignación de roles: solo ADMIN (HU-17)
+        .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+
         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 

@@ -55,6 +55,9 @@ public class SecurityConfiguration {
         // Profesionales: solo ADMIN los registra y gestiona
         .requestMatchers("/api/v1/profesionales/**").hasRole("ADMIN")
 
+        // Horario semanal: solo el profesional dueño (o ADMIN) lo consulta y modifica
+        .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
+
         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
 

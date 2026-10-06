@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
@@ -90,6 +91,31 @@ class JwtTokenServiceTest {
         assertNull(tokenService.parse("token-sin-puntos"));
         assertNull(tokenService.parse("solo.dospartes"));
         assertNull(tokenService.parse("demasiadas.partes.en.este.token"));
+    }
+
+    @Test
+    void unTokenPendienteDeMfaNoSirveComoAcceso() {
+        String pending = tokenService.createMfaPendingToken(account);
+
+        assertNull(tokenService.parse(pending));
+    }
+
+    @Test
+    void parseMfaPendingAceptaSoloTokensPendientesYDelMismoUsuario() {
+        String pending = tokenService.createMfaPendingToken(account);
+        String normal = tokenService.createToken(account);
+
+        assertEquals(account.getId(), tokenService.parseMfaPending(pending).orElseThrow());
+        assertTrue(tokenService.parseMfaPending(normal).isEmpty());
+    }
+
+    @Test
+    void unEmailMaliciosoNoPuedeImitarUnTokenPendiente() {
+        UserAccount tricky = new UserAccount("\"typ\":\"mfa\",x@example.com", "hash", "Tricky", UserRole.CUSTOMER);
+        setId(tricky, UUID.randomUUID());
+
+        assertNotNull(tokenService.parse(tokenService.createToken(tricky)));
+        assertTrue(tokenService.parseMfaPending(tokenService.createToken(tricky)).isEmpty());
     }
 
     @Test

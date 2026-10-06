@@ -2,15 +2,19 @@ package com.bookly.backendcf.auth.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
+import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.LoginRequest;
 import com.bookly.backendcf.auth.presentation.dto.LoginResponse;
 import com.bookly.backendcf.auth.security.JwtTokenService;
-import java.util.Optional;
 import java.lang.reflect.Proxy;
+import java.time.OffsetDateTime;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -70,5 +74,20 @@ class LoginServiceTest {
         assertNotNull(exception.getLockedUntil());
         assertThrows(AccountLockedException.class,
                 () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass")));
+    }
+
+    @Test
+    void adminRecibeRetoMfaSinTokenDeAccesoNiResetDeIntentos() {
+        account = new UserAccount("admin@example.com", new BCryptPasswordEncoder().encode("Valid1!pass"),
+                "Admin One", UserRole.ADMIN);
+        account.registerFailedLogin(OffsetDateTime.now(), 10, 15);
+
+        LoginResponse response = service.login(new LoginRequest("admin@example.com", "Valid1!pass"));
+
+        assertTrue(response.mfaRequired());
+        assertTrue(response.mfaSetupRequired());
+        assertNotNull(response.mfaToken());
+        assertNull(response.accessToken());
+        assertEquals(1, account.getFailedLoginAttempts());
     }
 }

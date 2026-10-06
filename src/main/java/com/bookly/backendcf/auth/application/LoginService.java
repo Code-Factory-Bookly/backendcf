@@ -1,6 +1,7 @@
 package com.bookly.backendcf.auth.application;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
+import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.LoginRequest;
 import com.bookly.backendcf.auth.presentation.dto.LoginResponse;
@@ -51,9 +52,12 @@ public class LoginService {
             throw new InvalidCredentialsException();
         }
 
+        if (account.getRole() == UserRole.ADMIN) {
+            // El contador de intentos no se resetea aqui: solo el segundo factor lo hace (ADR-010).
+            return LoginResponse.mfaChallenge(tokenService, account);
+        }
         account.registerSuccessfulLogin(now);
         repository.save(account);
-        return new LoginResponse(tokenService.createToken(account), "Bearer", tokenService.getExpiresInSeconds(),
-                new LoginResponse.UserSummary(account.getId(), account.getEmail(), account.getFullName(), account.getRole()));
+        return LoginResponse.authenticated(tokenService, account);
     }
 }

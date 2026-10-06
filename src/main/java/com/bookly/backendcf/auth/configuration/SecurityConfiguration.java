@@ -44,6 +44,8 @@ public class SecurityConfiguration {
                                 writeSecurityError(response, 403, "ACCESS_DENIED", "No tiene permisos para este recurso")))
                 .authorizeHttpRequests(authorize -> authorize
         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+        // MFA: el mfaToken viaja en el cuerpo y lo valida MfaService, no el filtro JWT
+        .requestMatchers("/api/v1/auth/mfa/**").permitAll()
 
         // Aprovisionamiento inicial: público y de un solo uso
         .requestMatchers(HttpMethod.POST, "/api/v1/platform/setup").permitAll()

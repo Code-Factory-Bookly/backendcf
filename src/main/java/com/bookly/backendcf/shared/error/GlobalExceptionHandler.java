@@ -3,6 +3,8 @@ package com.bookly.backendcf.shared.error;
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
 import com.bookly.backendcf.auth.application.AccountLockedException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
+import com.bookly.backendcf.auth.application.InvalidMfaCodeException;
+import com.bookly.backendcf.auth.application.InvalidMfaTokenException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -53,6 +55,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException exception) {
         return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(InvalidMfaCodeException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidMfaCode(InvalidMfaCodeException exception) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_MFA_CODE", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(InvalidMfaTokenException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidMfaToken(InvalidMfaTokenException exception) {
+        return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_MFA_TOKEN", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(AccountLockedException.class)

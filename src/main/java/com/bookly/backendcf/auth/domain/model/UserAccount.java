@@ -109,6 +109,11 @@ public class UserAccount {
         updatedAt = now;
     }
 
+    public void changeRole(UserRole newRole, OffsetDateTime now) {
+        this.role = newRole;
+        this.updatedAt = now;
+    }
+
     public void registerSuccessfulLogin(OffsetDateTime now) {
         failedLoginAttempts = 0;
         lockedUntil = null;

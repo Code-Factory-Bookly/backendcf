@@ -25,4 +25,9 @@ public record ProfessionalRequest(
         @NotBlank(message = "La especialidad es obligatoria")
         @Size(max = 100, message = "La especialidad no puede superar 100 caracteres")
         String specialty) {
+
+    // Mismo motivo que RegisterCustomerRequest: recorta antes de @Email (MantisBT BUG-001).
+    public ProfessionalRequest {
+        email = email == null ? null : email.strip();
+    }
 }

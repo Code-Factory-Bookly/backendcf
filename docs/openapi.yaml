@@ -33,6 +33,10 @@ paths:
     post:
       tags: [Auth]
       summary: Iniciar sesión
+      description: >-
+        El 401 es deliberadamente el mismo para correo inexistente, cuenta deshabilitada, cuenta
+        bloqueada por intentos fallidos y contraseña incorrecta: no distinguir el motivo evita que
+        un tercero pueda enumerar que correos tienen cuenta en la plataforma.
       operationId: login
       requestBody:
         required: true
@@ -47,7 +51,6 @@ paths:
               schema: { $ref: '#/components/schemas/LoginResponse' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '423': { $ref: '#/components/responses/LockedError' }
   /platform/setup:
     post:
       tags: [Platform]
@@ -410,5 +413,4 @@ components:
     ConflictError: { description: Conflicto de integridad o estado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     UnauthorizedError: { description: Autenticación requerida, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     ForbiddenError: { description: Permisos insuficientes, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
-    LockedError: { description: Cuenta bloqueada, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     NotFoundError: { description: Recurso no encontrado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

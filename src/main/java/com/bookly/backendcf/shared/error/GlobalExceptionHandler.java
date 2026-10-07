@@ -1,7 +1,6 @@
 package com.bookly.backendcf.shared.error;
 
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
-import com.bookly.backendcf.auth.application.AccountLockedException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
@@ -71,12 +70,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException exception) {
         return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage(), Map.of());
-    }
-
-    @ExceptionHandler(AccountLockedException.class)
-    public ResponseEntity<ApiErrorResponse> handleAccountLocked(AccountLockedException exception) {
-        return buildResponse(HttpStatus.LOCKED, "ACCOUNT_LOCKED", exception.getMessage(),
-                Map.of("lockedUntil", exception.getLockedUntil().toString()));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

@@ -37,17 +37,15 @@ public class LoginService {
         UserAccount account = repository.findByEmail(email).orElseThrow(InvalidCredentialsException::new);
         OffsetDateTime now = OffsetDateTime.now();
 
-        if (!account.isEnabled()) {
+        // No se distingue el motivo del rechazo (correo inexistente, cuenta deshabilitada,
+        // bloqueada o contraseña incorrecta): revelarlo permitiria a un tercero enumerar que
+        // correos tienen cuenta en la plataforma observando codigos de respuesta distintos
+        // (MantisBT BUG-004). El bloqueo se sigue aplicando igual, solo que en silencio.
+        if (!account.isEnabled() || account.isLocked(now)) {
             throw new InvalidCredentialsException();
         }
-        if (account.isLocked(now)) {
-            throw new AccountLockedException(account.getLockedUntil());
-        }
         if (!passwordEncoder.matches(request.password(), account.getPasswordHash())) {
-            UserAccount updatedAccount = loginAttemptRecorder.recordFailure(email, maxAttempts, lockMinutes);
-            if (updatedAccount.isLocked(OffsetDateTime.now())) {
-                throw new AccountLockedException(updatedAccount.getLockedUntil());
-            }
+            loginAttemptRecorder.recordFailure(email, maxAttempts, lockMinutes);
             throw new InvalidCredentialsException();
         }
 

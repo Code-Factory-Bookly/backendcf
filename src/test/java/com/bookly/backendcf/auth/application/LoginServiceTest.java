@@ -56,19 +56,30 @@ class LoginServiceTest {
         assertEquals(1, account.getFailedLoginAttempts());
     }
 
+    // MantisBT BUG-004: una cuenta bloqueada no debe distinguirse de una contraseña incorrecta en
+    // la respuesta (ambas son InvalidCredentialsException/401), para no revelar que el correo existe.
     @Test
-    void quintoIntentoFallidoBloqueaLaCuenta() {
-        for (int attempt = 1; attempt <= 4; attempt++) {
+    void quintoIntentoFallidoBloqueaLaCuentaSinDistinguirloEnLaRespuesta() {
+        for (int attempt = 1; attempt <= 5; attempt++) {
             assertThrows(InvalidCredentialsException.class,
                     () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
         }
 
-        AccountLockedException exception = assertThrows(AccountLockedException.class,
-                () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
+        assertEquals(5, account.getFailedLoginAttempts());
+        assertNotNull(account.getLockedUntil());
+    }
+
+    // MantisBT BUG-003 (reportado pero no reproducido): el contador no debe seguir creciendo una
+    // vez bloqueada la cuenta, ni siquiera con la contraseña correcta.
+    @Test
+    void elContadorNoSigueCreciendoTrasElBloqueo() {
+        for (int attempt = 1; attempt <= 6; attempt++) {
+            assertThrows(InvalidCredentialsException.class,
+                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass")));
+        }
+        assertThrows(InvalidCredentialsException.class,
+                () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass")));
 
         assertEquals(5, account.getFailedLoginAttempts());
-        assertNotNull(exception.getLockedUntil());
-        assertThrows(AccountLockedException.class,
-                () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass")));
     }
 }

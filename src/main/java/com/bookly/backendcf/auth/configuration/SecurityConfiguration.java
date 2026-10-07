@@ -1,5 +1,6 @@
 package com.bookly.backendcf.auth.configuration;
 
+import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.security.JwtAuthenticationFilter;
 import com.bookly.backendcf.auth.security.JwtTokenService;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,12 +24,14 @@ import java.util.UUID;
 public class SecurityConfiguration {
 
     private final JwtTokenService tokenService;
+    private final UserAccountRepository accountRepository;
 
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
-    public SecurityConfiguration(JwtTokenService tokenService) {
+    public SecurityConfiguration(JwtTokenService tokenService, UserAccountRepository accountRepository) {
         this.tokenService = tokenService;
+        this.accountRepository = accountRepository;
     }
 
     @Bean
@@ -61,7 +64,7 @@ public class SecurityConfiguration {
         .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
 
         .anyRequest().authenticated())
-                .addFilterBefore(new JwtAuthenticationFilter(tokenService), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthenticationFilter(tokenService, accountRepository), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

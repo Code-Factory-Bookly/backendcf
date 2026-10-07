@@ -175,7 +175,8 @@ paths:
         Solo ADMIN. Cambia el rol de la cuenta entre CUSTOMER, PROFESSIONAL y ADMIN (HU-17). Para
         asignar PROFESSIONAL a una cuenta sin perfil se requiere la especialidad y se crea el perfil.
         Una cuenta con perfil profesional no puede cambiar a otro rol (409 ROLE_CHANGE_CONFLICT). El
-        token que ya emitió el usuario conserva el rol anterior hasta que expire.
+        rol se revisa contra la base de datos en cada petición, no contra el token: un cambio de rol
+        aplica de inmediato en la siguiente petición del usuario, sin esperar a que su token expire.
         Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 403 ACCESS_DENIED, 404 USER_NOT_FOUND y 409
         ROLE_CHANGE_CONFLICT o SPECIALTY_REQUIRED.
       operationId: assignUserRole

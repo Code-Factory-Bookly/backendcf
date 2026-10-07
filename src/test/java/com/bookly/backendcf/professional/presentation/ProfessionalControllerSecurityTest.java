@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
+import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.security.JwtTokenService;
 import com.bookly.backendcf.professional.application.RegisterProfessionalService;
 import com.bookly.backendcf.professional.presentation.dto.ProfessionalResponse;
@@ -37,6 +38,9 @@ class ProfessionalControllerSecurityTest {
 
     @Autowired
     private JwtTokenService tokenService;
+
+    @Autowired
+    private UserAccountRepository accountRepository;
 
     @MockitoBean
     private RegisterProfessionalService registerProfessionalService;
@@ -74,6 +78,22 @@ class ProfessionalControllerSecurityTest {
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
+    // MantisBT BUG-005: un token con firma valida para un usuario que nunca existio en la base
+    // (o que fue borrado despues de emitirse) debe rechazarse, no aceptarse como ADMIN.
+    @Test
+    void unTokenValidoParaUnUsuarioInexistenteDevuelveUnauthorized() throws Exception {
+        UserAccount ghost = new UserAccount("fantasma@example.com", "hashed-password", "Fantasma", UserRole.ADMIN);
+        setId(ghost, UUID.randomUUID());
+        String ghostToken = tokenService.createToken(ghost);
+
+        mockMvc.perform(post(PROFESSIONAL_ENDPOINT)
+                        .header("Authorization", "Bearer " + ghostToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
     @Test
     void administradorPuedeRegistrarProfesional() throws Exception {
         String adminToken = tokenFor(UserRole.ADMIN);
@@ -87,15 +107,22 @@ class ProfessionalControllerSecurityTest {
                 .andExpect(jsonPath("$.specialty").value("Ortodoncia"));
     }
 
-    private String tokenFor(UserRole role) throws Exception {
+    // El token solo lo acepta el filtro si la cuenta existe en la base (MantisBT BUG-005), asi que
+    // cada token de prueba necesita una cuenta real persistida, no un objeto solo en memoria.
+    private String tokenFor(UserRole role) {
         UserAccount account = new UserAccount(
-                "test@example.com",
-                "hashed-password",
-                "Usuario de prueba",
-                role);
-        Field idField = UserAccount.class.getDeclaredField("id");
-        idField.setAccessible(true);
-        idField.set(account, UUID.randomUUID());
-        return tokenService.createToken(account);
+                role.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com",
+                "hashed-password", "Usuario de prueba", role);
+        return tokenService.createToken(accountRepository.save(account));
+    }
+
+    private void setId(UserAccount account, UUID id) {
+        try {
+            Field field = UserAccount.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(account, id);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

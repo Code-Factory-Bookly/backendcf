@@ -9,8 +9,10 @@ import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepositor
 import com.bookly.backendcf.auth.presentation.dto.LoginRequest;
 import com.bookly.backendcf.auth.presentation.dto.LoginResponse;
 import com.bookly.backendcf.auth.security.JwtTokenService;
+import java.lang.reflect.Field;
 import java.util.Optional;
 import java.lang.reflect.Proxy;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -23,6 +25,7 @@ class LoginServiceTest {
     @BeforeEach
     void setUp() {
         account = new UserAccount("customer@example.com", new BCryptPasswordEncoder().encode("Valid1!pass"), "Customer One");
+        setId(account, UUID.randomUUID());
         repository = (UserAccountRepository) Proxy.newProxyInstance(
                 UserAccountRepository.class.getClassLoader(),
                 new Class<?>[]{UserAccountRepository.class},
@@ -35,7 +38,7 @@ class LoginServiceTest {
                     throw new UnsupportedOperationException(method.getName());
                 });
         service = new LoginService(repository, new BCryptPasswordEncoder(),
-                new JwtTokenService("test-secret-that-is-at-least-32-bytes-long", 3600),
+                new JwtTokenService("test-secret-that-is-at-least-sixty-four-characters-long-for-tests", 3600),
                 new LoginAttemptRecorder(repository), 5, 15);
     }
 
@@ -81,5 +84,15 @@ class LoginServiceTest {
                 () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass")));
 
         assertEquals(5, account.getFailedLoginAttempts());
+    }
+
+    private void setId(UserAccount account, UUID id) {
+        try {
+            Field field = UserAccount.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(account, id);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

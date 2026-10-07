@@ -14,7 +14,8 @@ import org.junit.jupiter.api.Test;
 
 class JwtTokenServiceTest {
 
-    private static final String VALID_SECRET = "0123456789abcdef0123456789abcdef";
+    private static final String VALID_SECRET =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     private JwtTokenService tokenService;
     private UserAccount account;
@@ -32,7 +33,7 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void unSecretoMenorA32BytesNoPermiteCrearElServicio() {
+    void unSecretoMenorA64CaracteresNoPermiteCrearElServicio() {
         assertThrows(IllegalArgumentException.class, () -> new JwtTokenService("secreto-corto", 3600));
     }
 
@@ -79,7 +80,8 @@ class JwtTokenServiceTest {
 
     @Test
     void unTokenFirmadoConOtroSecretoSeRechaza() {
-        JwtTokenService otherService = new JwtTokenService("fedcba9876543210fedcba9876543210", 3600);
+        JwtTokenService otherService = new JwtTokenService(
+                "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", 3600);
         String token = otherService.createToken(account);
 
         assertNull(tokenService.parse(token));
@@ -90,6 +92,22 @@ class JwtTokenServiceTest {
         assertNull(tokenService.parse("token-sin-puntos"));
         assertNull(tokenService.parse("solo.dospartes"));
         assertNull(tokenService.parse("demasiadas.partes.en.este.token"));
+    }
+
+    // SEC-001 vector 1: un token con "alg":"none" y firma vacia (el ataque clasico de
+    // algorithm confusion) debe rechazarse igual que cualquier firma invalida.
+    @Test
+    void unTokenConAlgNoneYFirmaVaciaSeRechaza() {
+        String header = base64("{\"alg\":\"none\",\"typ\":\"JWT\"}");
+        String payload = base64("{\"sub\":\"" + account.getId() + "\",\"role\":\"ADMIN\",\"exp\":9999999999}");
+        String forged = header + "." + payload + ".";
+
+        assertNull(tokenService.parse(forged));
+    }
+
+    private static String base64(String value) {
+        return java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     @Test

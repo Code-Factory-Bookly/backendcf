@@ -12,7 +12,9 @@ import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentRequest;
+import com.bookly.backendcf.auth.presentation.dto.UserSearchResult;
 import com.bookly.backendcf.professional.infrastructure.persistence.ProfessionalRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,6 +81,46 @@ class RoleAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.assign(userId, new RoleAssignmentRequest(UserRole.ADMIN, null)))
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void busquedaSinTextoDevuelveSugerenciasExistentes() {
+        UserAccount existing = new UserAccount("sugerido@example.com", "hash", "Sugerido Uno", UserRole.CUSTOMER);
+        when(userRepository.findTop10ByOrderByFullNameAsc()).thenReturn(List.of(existing));
+        when(professionalRepository.existsById(existing.getId())).thenReturn(false);
+
+        List<UserSearchResult> results = service.search(" ");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).email()).isEqualTo("sugerido@example.com");
+        assertThat(results.get(0).hasProfessionalProfile()).isFalse();
+        verify(userRepository, never())
+                .findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(any(), any());
+    }
+
+    @Test
+    void busquedaConTextoFiltraPorCorreoONombreYMarcaPerfilProfesional() {
+        UserAccount professional = new UserAccount("pro@example.com", "hash", "Pro Uno", UserRole.PROFESSIONAL);
+        when(userRepository.findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(
+                        "pro", "pro"))
+                .thenReturn(List.of(professional));
+        when(professionalRepository.existsById(professional.getId())).thenReturn(true);
+
+        List<UserSearchResult> results = service.search("pro");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).hasProfessionalProfile()).isTrue();
+        verify(userRepository, never()).findTop10ByOrderByFullNameAsc();
+    }
+
+    @Test
+    void busquedaConUnSoloCaracterSeTrataComoSinTexto() {
+        when(userRepository.findTop10ByOrderByFullNameAsc()).thenReturn(List.of());
+
+        List<UserSearchResult> results = service.search("a");
+
+        assertThat(results).isEmpty();
+        verify(userRepository).findTop10ByOrderByFullNameAsc();
     }
 
     private void givenUser(UserRole role) {

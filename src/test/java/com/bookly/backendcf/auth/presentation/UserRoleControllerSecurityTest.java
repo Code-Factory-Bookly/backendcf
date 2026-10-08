@@ -3,6 +3,7 @@ package com.bookly.backendcf.auth.presentation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,7 +13,9 @@ import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentResponse;
+import com.bookly.backendcf.auth.presentation.dto.UserSearchResult;
 import com.bookly.backendcf.auth.security.JwtTokenService;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +50,8 @@ class UserRoleControllerSecurityTest {
     void setUp() {
         when(roleAssignmentService.assign(eq(targetId), any())).thenReturn(
                 new RoleAssignmentResponse(targetId, "usuario@example.com", "Usuario", UserRole.PROFESSIONAL));
+        when(roleAssignmentService.search(any())).thenReturn(List.of(
+                new UserSearchResult(targetId, "usuario@example.com", "Usuario", UserRole.PROFESSIONAL, true)));
     }
 
     @Test
@@ -85,6 +90,38 @@ class UserRoleControllerSecurityTest {
                         .content(VALID_REQUEST))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("PROFESSIONAL"));
+    }
+
+    @Test
+    void busquedaSinTokenDevuelveUnauthorized() throws Exception {
+        mockMvc.perform(get("/api/v1/usuarios/buscar").param("q", "usuario"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void busquedaClienteDevuelveForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/usuarios/buscar")
+                        .param("q", "usuario")
+                        .header("Authorization", "Bearer " + tokenFor(UserRole.CUSTOMER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void busquedaAdministradorDevuelveCoincidencias() throws Exception {
+        mockMvc.perform(get("/api/v1/usuarios/buscar")
+                        .param("q", "usuario")
+                        .header("Authorization", "Bearer " + tokenFor(UserRole.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email").value("usuario@example.com"))
+                .andExpect(jsonPath("$[0].hasProfessionalProfile").value(true));
+    }
+
+    @Test
+    void busquedaSinParametroQUsaCadenaVacia() throws Exception {
+        mockMvc.perform(get("/api/v1/usuarios/buscar")
+                        .header("Authorization", "Bearer " + tokenFor(UserRole.ADMIN)))
+                .andExpect(status().isOk());
     }
 
     // El token solo lo acepta el filtro si la cuenta existe en la base (MantisBT BUG-005), asi que

@@ -32,7 +32,8 @@ public class CreateBookingService {
         validateTimeRange(startTime, endTime);
         validateFutureTime(startTime);
 
-        // Verificar solapamientos (informativo, la BD es la fuente de verdad)
+        // Verificar solapamientos ANTES de intentar guardar
+        // La BD es la fuente de verdad con el UNIQUE constraint
         List<Booking> overlapping = bookingRepository.findOverlappingBookings(professionalId, startTime, endTime);
         if (!overlapping.isEmpty()) {
             throw new BookingConflictException("SLOT_OCUPADO", "El profesional ya tiene una reserva en ese horario");
@@ -43,7 +44,8 @@ public class CreateBookingService {
             Booking booking = new Booking(customerId, professionalId, serviceId, startTime, endTime);
             booking.setStatus(BookingStatus.CONFIRMADA);
 
-            // Guardar en BD
+            // Guardar en BD - aquí es donde el UNIQUE constraint previene race conditions
+            // Si otro thread intenta la misma franja simultáneamente, la BD rechazará una de las dos
             Booking saved = bookingRepository.save(booking);
 
             // Publicar evento
@@ -60,6 +62,7 @@ public class CreateBookingService {
             return saved;
 
         } catch (Exception e) {
+            // El UNIQUE constraint de la BD lanza una excepción cuando hay duplicado
             if (e.getMessage() != null && e.getMessage().contains("unique_booking_per_professional_time")) {
                 throw new BookingConflictException("SLOT_OCUPADO", "El profesional ya tiene una reserva en ese horario");
             }

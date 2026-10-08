@@ -406,6 +406,20 @@ actor.
 La información de auditoría no debe contener contraseñas, tokens, secretos ni datos personales
 innecesarios. El detalle adicional se almacenará solamente cuando tenga valor para la trazabilidad.
 
+### Implementación de BD-04
+
+La validación de persistencia se automatiza en
+`src/test/java/com/bookly/backendcf/audit/infrastructure/persistence/AuditLogPersistenceTest.java`.
+La prueba guarda una entrada con `saveAndFlush`, la recupera mediante la consulta por rango de fechas,
+verifica que se conserven sus campos y metadata, y comprueba el orden descendente determinista. El
+repositorio usa el contrato mínimo de Spring Data `Repository`, por lo que solo declara operaciones de
+inserción y consulta; no expone métodos de actualización o eliminación.
+
+La validación de inmutabilidad en PostgreSQL se mantiene en
+`docs/evidencia/HU-19-integridad.sql`. Allí se ejecutan intentos de `UPDATE`, `DELETE` y `TRUNCATE`
+contra la tabla creada por `V40__create_audit_log.sql`, y cada operación debe ser rechazada por los
+triggers de la base. El script termina con `ROLLBACK` para no dejar datos de prueba.
+
 ### 5. Consulta administrativa
 
 HU-19 expondrá una consulta REST versionada bajo `/api/v1`, con rango de fechas como filtro mínimo.

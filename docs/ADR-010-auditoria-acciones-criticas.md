@@ -256,6 +256,24 @@ La migración ejecutable se encuentra en
 índices, y una función de PostgreSQL con triggers que rechazan `UPDATE`, `DELETE` y `TRUNCATE`. La
 migración no crea relaciones directas con `bookings` ni aplica `ON DELETE CASCADE` sobre `app_user`.
 
+La evidencia reproducible de BD-03 se encuentra en
+`docs/evidencia/HU-19-integridad.sql`. El script verifica las restricciones de dominio, la FK del actor,
+los índices y el rechazo de `UPDATE`, `DELETE` y `TRUNCATE`; se ejecuta dentro de una transacción que
+termina en `ROLLBACK`.
+
+## Implementación de BD-03
+
+La validación se concentra en una evidencia PostgreSQL reproducible, en lugar de crear una segunda
+migración o duplicar restricciones. El script comprueba:
+
+- inserción válida y `metadata` por defecto;
+- nulabilidad de `actor_user_id`;
+- valores permitidos de `action_type` y `resource_type`;
+- existencia del actor referenciado;
+- rechazo de `UPDATE`, `DELETE` y `TRUNCATE`;
+- conservación del actor por la FK sin cascada;
+- presencia de los índices de fecha y actor.
+
 ### 4. Persistencia e inmutabilidad
 
 La fuente de verdad será una tabla `audit_log`, creada mediante la migración `V40` asignada a Elena.

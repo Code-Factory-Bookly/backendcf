@@ -47,6 +47,8 @@ public class SecurityConfiguration {
                                 writeSecurityError(response, 403, "ACCESS_DENIED", "No tiene permisos para este recurso")))
                 .authorizeHttpRequests(authorize -> authorize
         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+        // MFA: el mfaToken viaja en el cuerpo y lo valida MfaService, no el filtro JWT
+        .requestMatchers("/api/v1/auth/mfa/**").permitAll()
 
         // Aprovisionamiento inicial: público y de un solo uso
         .requestMatchers(HttpMethod.POST, "/api/v1/platform/setup").permitAll()
@@ -58,8 +60,11 @@ public class SecurityConfiguration {
         // Profesionales: solo ADMIN los registra y gestiona
         .requestMatchers("/api/v1/profesionales/**").hasRole("ADMIN")
 
-        // Asignación de roles: solo ADMIN (HU-17)
+        // Asignación de roles y reseteo de clave por ADMIN (HU-17 + parche sin HU-10)
         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+
+        // Ajustes de MFA del propio usuario autenticado (no el mfaToken de login)
+        .requestMatchers("/api/v1/mfa/**").hasRole("ADMIN")
         // Horario semanal: solo el profesional dueño (o ADMIN) lo consulta y modifica
         .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
 

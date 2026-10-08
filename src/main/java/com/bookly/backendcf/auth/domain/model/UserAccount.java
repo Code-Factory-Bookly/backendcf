@@ -41,6 +41,12 @@ public class UserAccount {
     @Column(name = "locked_until")
     private OffsetDateTime lockedUntil;
 
+    @Column(name = "mfa_enabled", nullable = false)
+    private boolean mfaEnabled;
+
+    @Column(name = "mfa_secret_encrypted", length = 512)
+    private String mfaSecretEncrypted;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -114,10 +120,40 @@ public class UserAccount {
         this.updatedAt = now;
     }
 
+    public void updatePassword(String newPasswordHash, OffsetDateTime now) {
+        this.passwordHash = newPasswordHash;
+        this.updatedAt = now;
+    }
+
     public void registerSuccessfulLogin(OffsetDateTime now) {
         failedLoginAttempts = 0;
         lockedUntil = null;
         updatedAt = now;
+    }
+
+    public boolean isMfaEnabled() {
+        return mfaEnabled;
+    }
+
+    public String getMfaSecretEncrypted() {
+        return mfaSecretEncrypted;
+    }
+
+    public void beginMfaEnrollment(String encryptedSecret, OffsetDateTime now) {
+        this.mfaSecretEncrypted = encryptedSecret;
+        this.mfaEnabled = false;
+        this.updatedAt = now;
+    }
+
+    public void confirmMfaEnrollment(OffsetDateTime now) {
+        this.mfaEnabled = true;
+        this.updatedAt = now;
+    }
+
+    public void disableMfa(OffsetDateTime now) {
+        this.mfaEnabled = false;
+        this.mfaSecretEncrypted = null;
+        this.updatedAt = now;
     }
 
     public OffsetDateTime getCreatedAt() {

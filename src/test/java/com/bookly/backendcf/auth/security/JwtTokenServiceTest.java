@@ -4,13 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import java.lang.reflect.Field;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 class JwtTokenServiceTest {
@@ -54,11 +54,16 @@ class JwtTokenServiceTest {
         assertEquals("ADMIN", claims.role());
     }
 
-    @Disabled("Not part of HU-08")
     @Test
     void unTokenConFirmaAlteradaSeRechaza() {
         String token = tokenService.createToken(account);
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        // Se altera el penultimo caracter, no el ultimo: en base64url el ultimo caracter de una
+        // firma HS256 (32 bytes) solo codifica 4 bits reales (los otros 2 son relleno), asi que
+        // alternar entre 'A' y 'B' ahi puede no cambiar los bytes decodificados y volver el test
+        // inestable. El penultimo caracter no tiene ese relleno.
+        int i = token.length() - 2;
+        char flipped = token.charAt(i) == 'A' ? 'B' : 'A';
+        String tampered = token.substring(0, i) + flipped + token.substring(i + 1);
 
         assertNull(tokenService.parse(tampered));
     }
@@ -96,6 +101,8 @@ class JwtTokenServiceTest {
         assertNull(tokenService.parse("demasiadas.partes.en.este.token"));
     }
 
+    // SEC-001 vector 1: un token con "alg":"none" y firma vacia (el ataque clasico de
+    // algorithm confusion) debe rechazarse igual que cualquier firma invalida.
     @Test
     void unTokenConAlgNoneYFirmaVaciaSeRechaza() {
         String header = base64("{\"alg\":\"none\",\"typ\":\"JWT\"}");
@@ -108,6 +115,31 @@ class JwtTokenServiceTest {
     private static String base64(String value) {
         return java.util.Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void unTokenPendienteDeMfaNoSirveComoAcceso() {
+        String pending = tokenService.createMfaPendingToken(account);
+
+        assertNull(tokenService.parse(pending));
+    }
+
+    @Test
+    void parseMfaPendingAceptaSoloTokensPendientesYDelMismoUsuario() {
+        String pending = tokenService.createMfaPendingToken(account);
+        String normal = tokenService.createToken(account);
+
+        assertEquals(account.getId(), tokenService.parseMfaPending(pending).orElseThrow());
+        assertTrue(tokenService.parseMfaPending(normal).isEmpty());
+    }
+
+    @Test
+    void unEmailMaliciosoNoPuedeImitarUnTokenPendiente() {
+        UserAccount tricky = new UserAccount("\"typ\":\"mfa\",x@example.com", "hash", "Tricky", UserRole.CUSTOMER);
+        setId(tricky, UUID.randomUUID());
+
+        assertNotNull(tokenService.parse(tokenService.createToken(tricky)));
+        assertTrue(tokenService.parseMfaPending(tokenService.createToken(tricky)).isEmpty());
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.bookly.backendcf.shared.error;
 
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
+import com.bookly.backendcf.audit.application.InvalidAuditQueryException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -46,6 +47,15 @@ public class GlobalExceptionHandler {
                 "VALIDATION_ERROR",
                 "El request contiene datos inválidos",
                 Map.of(parameter, "El valor de '" + parameter + "' no tiene el formato de " + expectedType));
+    }
+
+    @ExceptionHandler(InvalidAuditQueryException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidAuditQuery(InvalidAuditQueryException exception) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                exception.getMessage(),
+                exception.getDetails());
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)

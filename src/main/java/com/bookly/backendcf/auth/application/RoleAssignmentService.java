@@ -2,11 +2,14 @@ package com.bookly.backendcf.auth.application;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
+import com.bookly.backendcf.auth.domain.events.RoleChangedEvent;
+import com.bookly.backendcf.auth.infrastructure.event.RoleEventPublisher;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentRequest;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentResponse;
 import com.bookly.backendcf.professional.domain.model.Professional;
 import com.bookly.backendcf.professional.infrastructure.persistence.ProfessionalRepository;
+import com.bookly.backendcf.shared.security.ActorIdentityProvider;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -17,12 +20,18 @@ public class RoleAssignmentService {
 
     private final UserAccountRepository userAccountRepository;
     private final ProfessionalRepository professionalRepository;
+    private final RoleEventPublisher roleEventPublisher;
+    private final ActorIdentityProvider actorIdentityProvider;
 
     public RoleAssignmentService(
             UserAccountRepository userAccountRepository,
-            ProfessionalRepository professionalRepository) {
+            ProfessionalRepository professionalRepository,
+            RoleEventPublisher roleEventPublisher,
+            ActorIdentityProvider actorIdentityProvider) {
         this.userAccountRepository = userAccountRepository;
         this.professionalRepository = professionalRepository;
+        this.roleEventPublisher = roleEventPublisher;
+        this.actorIdentityProvider = actorIdentityProvider;
     }
 
     @Transactional
@@ -35,6 +44,9 @@ public class RoleAssignmentService {
         if (request.role().equals(account.getRole())) {
             return RoleAssignmentResponse.from(account);
         }
+
+        UserRole previousRole = account.getRole();
+        UUID actorUserId = actorIdentityProvider.currentActorId();
         if (hasProfile && !becomesProfessional) {
             throw new ProfessionalProfileExistsException();
         }
@@ -50,6 +62,12 @@ public class RoleAssignmentService {
         if (becomesProfessional && !hasProfile) {
             professionalRepository.saveAndFlush(new Professional(userId, specialty.trim().replaceAll("\\s+", " ")));
         }
+        roleEventPublisher.publish(new RoleChangedEvent(
+                actorUserId,
+                userId,
+                previousRole,
+                saved.getRole(),
+                OffsetDateTime.now()));
         return RoleAssignmentResponse.from(saved);
     }
 }

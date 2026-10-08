@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Bookly Backend API
   version: 1.0.0
-  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-20 y HU-22.
+  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-19, HU-20 y HU-22.
 servers:
   - url: http://localhost:8080/api/v1
 tags:
@@ -10,6 +10,7 @@ tags:
   - name: Platform
   - name: Services
   - name: Professionals
+  - name: Audit
   - name: Reservas
 paths:
   /auth/register:
@@ -199,6 +200,44 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+
+  /auditoria:
+    get:
+      tags: [ Audit ]
+      summary: Consultar bitácora de auditoría
+      description: >-
+        Consulta las acciones críticas registradas para un rango de fechas. Solo ADMIN puede acceder.
+        La respuesta se ordena por fecha de ocurrencia descendente y usa paginación determinista.
+      operationId: listAuditLog
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Inicio inclusivo del rango en formato ISO-8601.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          description: Fin inclusivo del rango en formato ISO-8601.
+          schema: { type: string, format: date-time }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Bitácora paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditLogPageResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
 
   /horarios/{professionalId}:
     parameters:
@@ -530,6 +569,53 @@ components:
         slots:
           type: array
           items: { $ref: '#/components/schemas/ScheduleSlot' }
+    AuditLogPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/AuditLog' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalElements: { type: integer, format: int64, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid }
+        actionType: { type: string, enum: [BOOKING_CREATED, BOOKING_CANCELLED, ROLE_CHANGED] }
+        resourceType: { type: string, enum: [BOOKING, USER] }
+        resourceId: { type: string, format: uuid, nullable: true }
+        occurredAt: { type: string, format: date-time }
+        sourceIp: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: { type: string } }
+    ProfessionalRequest:
+      type: object
+      required: [email, password, fullName, specialty]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        password: { type: string, format: password, minLength: 8, maxLength: 64 }
+        fullName: { type: string, maxLength: 150 }
+        specialty: { type: string, maxLength: 100 }
+    ProfessionalResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        specialty: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
+    ApiError:
+      type: object
+      required: [errorCode, message, details, traceId, timestamp]
+      properties:
+        errorCode: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: { type: string } }
+        traceId: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
   responses:
     ValidationError: { description: Datos inválidos, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     ConflictError: { description: Conflicto de integridad o estado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

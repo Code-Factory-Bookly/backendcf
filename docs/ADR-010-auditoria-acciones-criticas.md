@@ -1,0 +1,530 @@
+# ADR-010: Arquitectura del módulo de auditoría de acciones críticas
+
+- **Estado:** Propuesta
+- **Fecha:** 2026-10-08
+- **Responsables:** Arquitectura y Base de Datos
+- **Ámbito:** Sprint 2, HU-19
+
+## Contexto
+
+HU-19 requiere una bitácora consultable por el administrador para mantener la trazabilidad de
+acciones críticas ejecutadas en la plataforma. Como mínimo deben auditarse:
+
+- creación de una reserva;
+- cancelación de una reserva;
+- cambio de rol de un usuario.
+
+La bitácora debe indicar quién ejecutó la acción, qué acción se ejecutó y cuándo ocurrió. La consulta
+debe estar restringida a usuarios con rol `ADMIN`.
+
+El backend es un monolito modular Spring Boot con separación por módulos y capas. La solución debe
+mantener esa organización, usar PostgreSQL como fuente de verdad y evitar que la auditoría quede
+acoplada a un controlador o a una implementación concreta de reservas.
+
+Existen dos dependencias del sprint:
+
+1. HU-17 publica la matriz de roles y permisos. La consulta de auditoría utilizará la misma decisión
+   de autorización y el rol `ADMIN` existente.
+2. HU-08 y HU-09 publican los eventos o contratos de reserva que permiten identificar la creación y
+   cancelación de una reserva. HU-19 no debe inventar ni duplicar el modelo de reservas.
+
+## Decisión
+
+### 1. Módulo y capas
+
+Se crea el módulo `audit` con la misma estructura utilizada por los módulos actuales:
+
+```text
+audit/
+├── application/
+├── domain/model/
+├── infrastructure/persistence/
+└── presentation/
+```
+
+Sus responsabilidades serán:
+
+- `application`: registrar acciones y consultar la bitácora;
+- `domain/model`: representar una entrada de auditoría y los tipos de acción permitidos;
+- `infrastructure`: persistir y consultar `audit_log` mediante PostgreSQL/JPA;
+- `presentation`: exponer exclusivamente la consulta administrativa definida por HU-19.
+
+El módulo `audit` no contendrá reglas de reservas ni de asignación de roles. Recibirá la información
+de la acción mediante un contrato de aplicación y conservará únicamente la evidencia necesaria para
+la trazabilidad.
+
+### 2. Contrato de registro
+
+El registro se realizará mediante un puerto de aplicación, conceptualmente equivalente a:
+
+```text
+AuditRecorder.record(AuditAction action)
+```
+
+La primera definición ejecutable del contrato queda en:
+
+- `audit/application/AuditRecorder.java`;
+- `audit/domain/model/AuditAction.java`;
+- `audit/domain/model/AuditActionType.java`;
+- `audit/domain/model/AuditResourceType.java`.
+
+Estos tipos no dependen de Spring, JPA, PostgreSQL ni de los módulos consumidores. La persistencia y
+la implementación concreta del puerto se agregarán en las siguientes tasks.
+
+`AuditAction` deberá contener como mínimo:
+
+- `actorUserId`: identificador del usuario autenticado que ejecutó la acción;
+- `actionType`: tipo de acción (`BOOKING_CREATED`, `BOOKING_CANCELLED` o `ROLE_CHANGED`);
+- `resourceType`: tipo de recurso afectado (`BOOKING` o `USER`);
+- `resourceId`: identificador del recurso, cuando exista;
+- `occurredAt`: fecha y hora con zona horaria;
+- `sourceIp`: IP de origen, cuando esté disponible en el contexto de la solicitud;
+- `metadata`: datos técnicos mínimos y no sensibles, cuando sean necesarios.
+
+Los tipos de acción deben estar centralizados como un tipo controlado y no como cadenas arbitrarias
+repetidas por los módulos consumidores.
+
+### 3. Integración con operaciones críticas
+
+Los casos de uso que ejecutan una operación crítica serán responsables de solicitar el registro al
+puerto de auditoría después de completar correctamente la operación principal y dentro de la misma
+transacción cuando la operación sea transaccional.
+
+La integración seguirá estas reglas:
+
+- HU-08 solicitará `BOOKING_CREATED` después de confirmar la creación de la reserva.
+- HU-09 solicitará `BOOKING_CANCELLED` después de confirmar la cancelación.
+- HU-17 solicitará `ROLE_CHANGED` después de persistir el cambio de rol.
+- Una operación que termina con error no genera una entrada de acción exitosa.
+- El módulo de auditoría no leerá directamente el JWT para determinar el actor; utilizará la identidad
+  autenticada validada por el backend mediante un puerto o contexto de actor.
+- La publicación de eventos de reserva de Miguel podrá adaptarse al puerto de auditoría, sin duplicar
+  la lógica ni crear una segunda fuente de verdad.
+
+Si una integración asíncrona se adopta posteriormente, deberá utilizar un evento transaccional u otra
+garantía equivalente para no perder la auditoría después de confirmar la operación de negocio. Esa
+decisión queda fuera de ARQ-01 y no se introduce un broker en este sprint.
+
+## Flujo de registro de acciones exitosas
+
+ARQ-03 define el momento y la responsabilidad de cada integración. La auditoría no se registra desde
+los controladores REST ni antes de confirmar la operación principal.
+
+### Flujo común
+
+```text
+Solicitud autenticada
+        │
+        ▼
+Caso de uso valida reglas de negocio
+        │
+        ├── error ──► rollback / respuesta de error / sin auditoría exitosa
+        │
+        ▼
+Persistencia de la operación principal
+        │
+        ├── error ──► rollback / respuesta de error / sin auditoría exitosa
+        │
+        ▼
+Construcción de AuditAction
+        │
+        ▼
+AuditRecorder.record(action)
+        │
+        ├── error ──► rollback de la transacción de negocio
+        │
+        ▼
+Respuesta exitosa y evidencia de auditoría persistida
+```
+
+Cuando la operación principal y la auditoría sean transaccionales, ambas deben confirmarse como una
+unidad. No se debe devolver una respuesta exitosa de negocio si la auditoría obligatoria no pudo
+persistirse. Si el equipo decide posteriormente tolerar fallos de auditoría, deberá crear otra ADR y
+definir un mecanismo durable de reintento; no se asumirá esa tolerancia silenciosamente.
+
+### Creación de reserva: `BOOKING_CREATED`
+
+HU-08 ya publica `BookingCreatedEvent` mediante `BookingEventPublisher`. El adaptador de integración
+de reservas será responsable de:
+
+1. recibir el evento después de que la reserva haya sido guardada;
+2. construir un `AuditAction` con `actionType = BOOKING_CREATED`;
+3. usar `resourceType = BOOKING` y el identificador de la reserva como `resourceId`;
+4. obtener el actor autenticado del contexto validado de la solicitud;
+5. invocar `AuditRecorder.record(action)` dentro del límite transaccional de la operación.
+
+El módulo `audit` no importará clases del paquete `booking`. El adaptador podrá vivir en el módulo de
+reservas o en una capa de integración que conozca `BookingCreatedEvent` y dependa del puerto
+`AuditRecorder`.
+
+### Cancelación de reserva: `BOOKING_CANCELLED`
+
+HU-09 deberá publicar `BookingCancelledEvent` cuando la cancelación haya sido validada y persistida.
+El adaptador seguirá el mismo flujo de creación, cambiando únicamente:
+
+- `actionType = BOOKING_CANCELLED`;
+- `resourceType = BOOKING`;
+- `resourceId = bookingId`;
+- `metadata`, que podrá incluir la razón de cancelación si no contiene datos sensibles.
+
+Una cancelación rechazada por una regla de negocio, por ejemplo una política de anticipación, no genera
+una entrada de cancelación exitosa.
+
+### Cambio de rol: `ROLE_CHANGED`
+
+HU-17 ya está integrado en `main` mediante `RoleAssignmentService`. Después de persistir un cambio real
+de rol, el caso de uso deberá construir una acción con:
+
+- `actionType = ROLE_CHANGED`;
+- `resourceType = USER`;
+- `resourceId = userId` del usuario cuyo rol cambió;
+- `actorUserId` igual al usuario autenticado que ejecutó la administración;
+- `metadata` con el rol anterior y el nuevo rol, sin incluir credenciales.
+
+Si el usuario solicita el mismo rol que ya tenía, no existe cambio efectivo y no se registra
+`ROLE_CHANGED`. Si la operación falla, tampoco se registra.
+
+### Identidad del actor
+
+El actor es quien ejecuta la operación, no necesariamente el usuario afectado. Por eso no se debe usar
+automáticamente `customerId` ni `resourceId` como `actorUserId`.
+
+En el monolito actual, el actor se obtiene del contexto de seguridad que ya validó el JWT contra la
+cuenta persistida. La capa de aplicación deberá recibir esa identidad mediante un puerto o servicio de
+contexto de actor, evitando acoplar el dominio directamente a `SecurityContextHolder`.
+
+Los eventos actuales de HU-08 contienen el identificador de la reserva y datos de negocio, pero no
+declaran explícitamente el actor. Mientras los eventos sean síncronos y se publiquen dentro de la
+solicitud autenticada, el adaptador puede resolver el actor desde el contexto de la solicitud. Si se
+convierten en eventos asíncronos, el contrato deberá incluir `actorUserId` y conservarlo de forma
+durable; no se intentará reconstruir el actor después de perder el contexto HTTP.
+
+### Conversión de fechas
+
+Los eventos actuales de HU-08 exponen `LocalDateTime`, mientras `AuditAction` requiere
+`OffsetDateTime`. La conversión se realizará en el adaptador de integración, usando UTC como convención
+del sistema, hasta que el contrato de eventos se unifique. La base de datos conservará la fecha con zona
+horaria.
+
+### Idempotencia y duplicados
+
+En este sprint los eventos se procesan de forma síncrona y una vez dentro de la transacción. Si en el
+futuro se habilitan reintentos o entrega asíncrona, el contrato deberá incluir un identificador de
+evento o una clave de idempotencia. La tabla y el caso de uso deberán impedir que un reintento registre
+dos veces la misma acción. Esa extensión se implementará antes de activar procesamiento asíncrono.
+
+### Responsabilidades por módulo
+
+| Módulo | Responsabilidad |
+|---|---|
+| `booking` | Publicar eventos de creación, reprogramación y cancelación después de validar la operación. |
+| `auth` | Publicar o solicitar auditoría después de un cambio real de rol. |
+| `audit` | Validar el contrato, persistir la acción y exponer la consulta administrativa. |
+| `shared/security` | Proporcionar la identidad autenticada validada al caso de uso. |
+| PostgreSQL | Conservar la evidencia y rechazar modificaciones o eliminaciones de la bitácora. |
+
+## Criterios de aceptación de ARQ-03
+
+- Se documenta un flujo común desde la solicitud hasta la persistencia de la auditoría.
+- Una operación fallida no genera una acción crítica exitosa.
+- Se define el flujo para `BOOKING_CREATED` usando el contrato publicado por HU-08.
+- Se define el flujo para `BOOKING_CANCELLED`, que será publicado por HU-09.
+- Se define el flujo para `ROLE_CHANGED` usando HU-17 ya integrado en `main`.
+- Se distingue entre el actor que ejecuta la acción y el recurso afectado.
+- Se define cómo obtener el actor sin confiar directamente en datos no validados del JWT.
+- Se documenta la conversión de `LocalDateTime` a `OffsetDateTime` en el límite de integración.
+- Se establece que cualquier futura integración asíncrona requerirá actor durable e idempotencia.
+- El módulo `audit` no depende de clases concretas de `booking` ni de `auth`.
+
+## Criterios de aceptación de BD-01
+
+- Se define el modelo lógico de `audit_log` y su relación con `app_user`.
+- La tabla no crea FKs directas hacia `bookings` ni otros módulos de negocio.
+- Se definen tipos, nulabilidad, PK, FK y restricciones de dominio.
+- `occurred_at` usa `TIMESTAMPTZ` para conservar la zona horaria.
+- `metadata` se almacena como `JSONB`, con `{}` como valor por defecto y sin secretos.
+- Se define un índice para consultas por rango de fechas y orden determinista.
+- Se define un índice para consultas de trazabilidad por actor.
+- Se establece que no existe `ON DELETE CASCADE` sobre el actor.
+- Se documenta la protección de `UPDATE` y `DELETE` mediante trigger para la migración siguiente.
+- El SQL descrito se materializa en `V40__create_audit_log.sql`, sin editar migraciones anteriores.
+
+## Implementación de BD-02
+
+La migración ejecutable se encuentra en
+`src/main/resources/db/migration/V40__create_audit_log.sql`. Crea `audit_log`, sus restricciones e
+índices, y una función de PostgreSQL con triggers que rechazan `UPDATE`, `DELETE` y `TRUNCATE`. La
+migración no crea relaciones directas con `bookings` ni aplica `ON DELETE CASCADE` sobre `app_user`.
+
+La evidencia reproducible de BD-03 se encuentra en
+`docs/evidencia/HU-19-integridad.sql`. El script verifica las restricciones de dominio, la FK del actor,
+los índices y el rechazo de `UPDATE`, `DELETE` y `TRUNCATE`; se ejecuta dentro de una transacción que
+termina en `ROLLBACK`.
+
+## Implementación de ARQ-04
+
+El caso de uso de registro se implementa en
+`audit/application/RegisterAuditActionService.java`, que satisface el puerto `AuditRecorder`, valida
+que cada acción use el tipo de recurso correspondiente y persiste con `saveAndFlush()` dentro de una
+transacción. Usa el puerto `audit/application/AuditLogStore.java`, por lo que la capa de aplicación no
+depende directamente de Spring Data JPA. La entidad `audit/domain/model/AuditLog.java` es inmutable
+desde el modelo de aplicación: no expone setters ni operaciones de actualización o eliminación.
+
+La persistencia se conecta mediante `audit/infrastructure/persistence/AuditLogRepositoryAdapter.java` y
+`AuditLogRepository.java`. La integración se realiza desde los módulos consumidores: HU-08 adapta
+`BookingCreatedEvent` y HU-17 adapta `RoleChangedEvent` hacia el puerto `AuditRecorder`, sin que
+`audit` dependa de sus clases concretas. La adaptación de `BookingCancelledEvent` queda pendiente de
+HU-09, que todavía no está integrada en `main`.
+
+La integración de HU-08 se implementa en
+`booking/infrastructure/event/BookingCreatedAuditListener.java`. El evento se publica de forma
+síncrona dentro de la transacción de creación; el `customerId` del evento representa al actor
+autenticado que creó la reserva, y la fecha sin zona se convierte a UTC en el límite de integración.
+
+La integración de HU-17 se implementa mediante `RoleChangedEvent`, publicado después de persistir un
+cambio real de rol, y `auth/infrastructure/event/RoleChangedAuditListener.java`. El actor se obtiene
+del contexto de seguridad validado mediante `ActorIdentityProvider`, mientras el usuario afectado se
+mantiene como `resourceId`. Si el rol solicitado ya era el vigente, no se publica ningún evento.
+
+## Implementación de ARQ-05
+
+La consulta administrativa se implementa mediante:
+
+- `audit/application/AuditQueryService.java`, que valida rango de fechas y paginación;
+- `audit/application/AuditLogQuery.java`, como puerto de lectura desacoplado de JPA;
+- `audit/infrastructure/persistence/AuditLogRepository.java`, que consulta por fecha con orden
+  determinista `occurredAt DESC, id DESC`;
+- `audit/presentation/AuditQueryController.java`, con `GET /api/v1/auditoria`;
+- `audit/presentation/dto/AuditLogResponse.java` y `AuditLogPageResponse.java`.
+
+El endpoint exige `from` y `to` en formato ISO-8601, permite páginas de 1 a 100 registros y está
+protegido en `SecurityConfiguration` exclusivamente para `ADMIN`. Los errores de rango o paginación
+usan el contrato uniforme `VALIDATION_ERROR`.
+
+Las pruebas de seguridad están en
+`src/test/java/com/bookly/backendcf/audit/presentation/AuditQueryControllerSecurityTest.java` y
+cubren `401`, `403` para `CUSTOMER` y `PROFESSIONAL`, y acceso exitoso para `ADMIN`.
+
+## Implementación de BD-03
+
+La validación se concentra en una evidencia PostgreSQL reproducible, en lugar de crear una segunda
+migración o duplicar restricciones. El script comprueba:
+
+- inserción válida y `metadata` por defecto;
+- nulabilidad de `actor_user_id`;
+- valores permitidos de `action_type` y `resource_type`;
+- existencia del actor referenciado;
+- rechazo de `UPDATE`, `DELETE` y `TRUNCATE`;
+- conservación del actor por la FK sin cascada;
+- presencia de los índices de fecha y actor.
+
+### 4. Persistencia e inmutabilidad
+
+La fuente de verdad será una tabla `audit_log`, creada mediante la migración `V40` asignada a Elena.
+La tabla será append-only:
+
+- la aplicación solo tendrá operación de inserción y consulta;
+- no se expondrán endpoints de actualización o eliminación;
+- el repositorio no ofrecerá operaciones de modificación o borrado;
+- PostgreSQL rechazará `UPDATE` y `DELETE` sobre la tabla mediante una protección declarativa o
+  procedural documentada en la migración, para que la inmutabilidad no dependa únicamente del código
+  Java.
+
+#### Modelo lógico
+
+La bitácora se modela como una entidad independiente con una relación de muchos registros hacia el
+usuario que ejecutó la acción:
+
+```text
+app_user (1) ─────────────── (N) audit_log
+             actor_user_id
+```
+
+`audit_log` no tendrá relaciones con `bookings`, `servicios` ni otras tablas de negocio. El recurso
+afectado se identifica mediante `resource_type` y `resource_id` para evitar que la bitácora quede
+acoplada a módulos que todavía están evolucionando. La relación con el actor sí es una FK porque el
+actor es una cuenta existente y la integridad de esa identidad debe estar protegida por PostgreSQL.
+
+| Atributo | Tipo lógico | Nulabilidad | Regla |
+|---|---|---:|---|
+| `id` | UUID | No | Identificador único de la entrada; PK. |
+| `actor_user_id` | UUID | No | FK hacia `app_user(id)`; no se elimina en cascada. |
+| `action_type` | Enumeración | No | `BOOKING_CREATED`, `BOOKING_CANCELLED` o `ROLE_CHANGED`. |
+| `resource_type` | Enumeración | No | `BOOKING` o `USER`. |
+| `resource_id` | UUID | Sí | Identificador del recurso afectado cuando exista. |
+| `occurred_at` | Fecha-hora con zona | No | Momento de la acción, almacenado como `TIMESTAMPTZ`. |
+| `source_ip` | Dirección de red | Sí | IP de origen si está disponible; admite IPv4 e IPv6. |
+| `metadata` | Objeto JSON | No | Datos técnicos mínimos; por defecto `{}`. No contiene secretos. |
+
+`resource_id` se mantiene nullable porque el contrato debe poder representar una acción crítica sin
+recurso persistente en futuras extensiones. Para las tres acciones iniciales de HU-19 deberá informarse.
+La aplicación validará esa condición por tipo de acción antes de guardar, y la migración conservará las
+restricciones generales que corresponden a la base.
+
+#### Modelo físico propuesto
+
+La migración `V40__create_audit_log.sql` deberá materializar el siguiente esquema compatible con las
+convenciones actuales de PostgreSQL:
+
+```sql
+CREATE TABLE audit_log (
+    id UUID NOT NULL,
+    actor_user_id UUID NOT NULL,
+    action_type VARCHAR(40) NOT NULL,
+    resource_type VARCHAR(30) NOT NULL,
+    resource_id UUID,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    source_ip VARCHAR(45),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT pk_audit_log PRIMARY KEY (id),
+    CONSTRAINT ck_audit_log_action_type CHECK (
+        action_type IN ('BOOKING_CREATED', 'BOOKING_CANCELLED', 'ROLE_CHANGED')
+    ),
+    CONSTRAINT ck_audit_log_resource_type CHECK (
+        resource_type IN ('BOOKING', 'USER')
+    ),
+    CONSTRAINT fk_audit_log_actor FOREIGN KEY (actor_user_id)
+        REFERENCES app_user (id)
+);
+
+CREATE INDEX ix_audit_log_occurred_at_id
+    ON audit_log (occurred_at DESC, id DESC);
+
+CREATE INDEX ix_audit_log_actor_occurred_at
+    ON audit_log (actor_user_id, occurred_at DESC);
+```
+
+La columna `source_ip` usa `VARCHAR(45)` para mantener el contrato de aplicación independiente del tipo
+JDBC específico y cubrir la longitud máxima de una dirección IPv6 textual. La validación de formato de
+IP, cuando el dato esté disponible, corresponde a la aplicación; una IP ausente se permite porque no
+todos los registros necesariamente provendrán de una solicitud HTTP.
+
+El índice `ix_audit_log_occurred_at_id` soporta la consulta principal de HU-19 por rango de fechas y
+el orden determinista `occurred_at DESC, id DESC`. El índice por actor soporta investigaciones de
+trazabilidad sin agregar índices sobre cada columna de manera redundante.
+
+#### Inmutabilidad en la base
+
+Como parte de BD-02, la migración agregará una función y un trigger de PostgreSQL que rechacen
+`UPDATE` y `DELETE` sobre `audit_log`. La aplicación tampoco expondrá esas operaciones y el repositorio
+solo ofrecerá inserción y consulta. Esta doble protección evita que la inmutabilidad dependa de un único
+nivel.
+
+La eliminación de usuarios no debe eliminar sus registros de auditoría. La relación con `app_user`
+no utilizará `ON DELETE CASCADE`; si el modelo de usuarios cambia, debe conservarse la evidencia del
+actor.
+
+La información de auditoría no debe contener contraseñas, tokens, secretos ni datos personales
+innecesarios. El detalle adicional se almacenará solamente cuando tenga valor para la trazabilidad.
+
+### Implementación de BD-04
+
+La validación de persistencia se automatiza en
+`src/test/java/com/bookly/backendcf/audit/infrastructure/persistence/AuditLogPersistenceTest.java`.
+La prueba guarda una entrada con `saveAndFlush`, la recupera mediante la consulta por rango de fechas,
+verifica que se conserven sus campos y metadata, y comprueba el orden descendente determinista. El
+repositorio usa el contrato mínimo de Spring Data `Repository`, por lo que solo declara operaciones de
+inserción y consulta; no expone métodos de actualización o eliminación.
+
+La validación de inmutabilidad en PostgreSQL se mantiene en
+`docs/evidencia/HU-19-integridad.sql`. Allí se ejecutan intentos de `UPDATE`, `DELETE` y `TRUNCATE`
+contra la tabla creada por `V40__create_audit_log.sql`, y cada operación debe ser rechazada por los
+triggers de la base. El script termina con `ROLLBACK` para no dejar datos de prueba.
+
+### 5. Consulta administrativa
+
+HU-19 expondrá una consulta REST versionada bajo `/api/v1`, con rango de fechas como filtro mínimo.
+La ruta exacta y sus DTO se definirán en la implementación y se reflejarán en `docs/openapi.yaml`.
+
+La autorización seguirá el contrato uniforme existente:
+
+- usuario no autenticado: `401 UNAUTHORIZED`;
+- usuario autenticado sin rol `ADMIN`: `403 ACCESS_DENIED`;
+- usuario con rol `ADMIN`: puede consultar.
+
+La consulta debe tener orden determinista por fecha de ocurrencia y contar con límite o paginación para
+evitar respuestas sin límite. Las fechas se validarán antes de consultar: la fecha inicial no puede ser
+posterior a la fecha final.
+
+## Modelo de componentes
+
+```text
+Reserva / Gestión de roles
+          │
+          │ AuditAction / evento adaptado
+          ▼
+   AuditRecorder (puerto)
+          │
+          ▼
+ RegisterAuditActionService
+          │
+          ▼
+ AuditLogRepository (puerto)
+          │
+          ▼
+ PostgreSQL: audit_log
+
+ ADMIN ──► AuditQueryController ──► AuditQueryService ──► AuditLogRepository
+```
+
+La dependencia apunta hacia el módulo de auditoría mediante contratos. `audit` no debe depender de
+`booking` ni de `auth` mediante clases concretas de infraestructura.
+
+## Alternativas consideradas
+
+| Alternativa | Motivo de descarte |
+|---|---|
+| Escribir únicamente en el log de la aplicación | No garantiza persistencia, consulta por fechas ni trazabilidad transaccional. |
+| Crear una tabla diferente para reservas, cancelaciones y roles | Duplica el modelo de auditoría y dificulta la consulta unificada exigida por HU-19. |
+| Registrar desde cada controlador REST | Acopla auditoría al transporte y puede omitir acciones ejecutadas por otros flujos de aplicación. |
+| Confiar únicamente en el rol recibido dentro del JWT | El actor debe provenir del contexto autenticado validado por el backend; no se debe confiar en datos no verificados. |
+| Permitir editar o borrar la bitácora | Contradice la inmutabilidad y debilita la trazabilidad ante incidentes. |
+| Incorporar un broker de mensajes en este sprint | No existe una necesidad operativa que justifique esa complejidad; se utilizarán contratos y transacciones del monolito modular. |
+
+## Consecuencias
+
+### Positivas
+
+- La auditoría queda separada de las reglas de reservas y autenticación.
+- Las acciones críticas comparten un formato consultable y trazable.
+- PostgreSQL conserva la autoridad sobre la persistencia y la inmutabilidad.
+- La consulta reutiliza el esquema de autorización existente (`401`/`403`).
+- La solución puede recibir eventos de reservas sin duplicar el modelo de `booking`.
+
+### Costos y riesgos
+
+- HU-08, HU-09 y HU-17 deben integrar explícitamente el contrato de auditoría.
+- Una operación asíncrona futura requerirá garantía transaccional para no perder registros.
+- Las pruebas automáticas no ejecutan Flyway; la migración debe validarse manualmente contra PostgreSQL.
+- La protección de `UPDATE` y `DELETE` debe probarse contra PostgreSQL, no solamente mediante mocks.
+
+## Criterios de aceptación de ARQ-01
+
+- Existe este ADR en `docs/ADR-010-auditoria-acciones-criticas.md`.
+- El módulo `audit` está definido con las capas del proyecto.
+- El contrato de registro incluye actor, acción, recurso y fecha de ocurrencia.
+- Se documentan las dependencias con HU-17, HU-08 y HU-09.
+- Se define que una acción fallida no genera un registro exitoso.
+- Se define la consulta exclusiva para `ADMIN` con respuestas `401` y `403`.
+- Se define una estrategia append-only y la protección de la tabla contra actualización y eliminación.
+- Se establece que no se almacenarán contraseñas, tokens, secretos ni datos personales innecesarios.
+- La decisión no introduce un broker ni modifica todavía el código de los módulos consumidores.
+
+## Implementación de ARQ-02
+
+El contrato se implementa como un puerto de aplicación y un comando de dominio inmutable. El comando
+valida que existan el actor, la acción, el recurso y la fecha; permite que el identificador del recurso
+y la IP sean opcionales según el contexto; y copia el mapa de metadatos para impedir que un consumidor
+modifique la evidencia después de construir la acción.
+
+Las pruebas del contrato se encuentran en
+`src/test/java/com/bookly/backendcf/audit/domain/model/AuditActionTest.java` y cubren la inmutabilidad
+de los metadatos, el mapa vacío por defecto y los campos obligatorios.
+
+## Trazabilidad
+
+- Requisito funcional: HU-19, `documentos_cursos/Historias_de_usuario_azure.md`.
+- Plan del sprint: `docs/PLAN-SPRINT-2.md`.
+- Autorización: HU-17 y `SecurityConfiguration`.
+- Integridad y migraciones: ADR-006 y sección de Flyway del plan del Sprint 2.
+- Próxima migración: `V40__create_audit_log.sql`.

@@ -3,7 +3,7 @@
 - **Estado:** Aceptada
 - **Fecha:** 2026-10-06
 - **Responsables:** David (implementación), Arquitectura
-- **Ámbito:** HU-18. `auth/application/LoginService`, `auth/application/MfaService`, `auth/security/JwtTokenService`, `V11__mfa_totp.sql`
+- **Ámbito:** HU-18. `auth/application/LoginService`, `auth/application/MfaService`, `auth/security/JwtTokenService`, `V41__mfa_totp.sql`
 
 ## Contexto
 

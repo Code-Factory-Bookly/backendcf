@@ -65,6 +65,8 @@ public class SecurityConfiguration {
 
         // Ajustes de MFA del propio usuario autenticado (no el mfaToken de login)
         .requestMatchers("/api/v1/mfa/**").hasRole("ADMIN")
+        // Auditoría: solo ADMIN (HU-19)
+        .requestMatchers(HttpMethod.GET, "/api/v1/auditoria", "/api/v1/auditoria/**").hasRole("ADMIN")
         // Horario semanal: solo el profesional dueño (o ADMIN) lo consulta y modifica
         .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
 

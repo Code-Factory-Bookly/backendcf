@@ -7,10 +7,12 @@ import com.bookly.backendcf.auth.infrastructure.event.RoleEventPublisher;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentRequest;
 import com.bookly.backendcf.auth.presentation.dto.RoleAssignmentResponse;
+import com.bookly.backendcf.auth.presentation.dto.UserSearchResult;
 import com.bookly.backendcf.professional.domain.model.Professional;
 import com.bookly.backendcf.professional.infrastructure.persistence.ProfessionalRepository;
 import com.bookly.backendcf.shared.security.ActorIdentityProvider;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,5 +71,21 @@ public class RoleAssignmentService {
                 saved.getRole(),
                 OffsetDateTime.now()));
         return RoleAssignmentResponse.from(saved);
+    }
+
+    // Busqueda por correo o nombre para la asignacion de roles: evita que el admin tenga que
+    // conocer el UUID del usuario de antemano. Sin texto (o un solo caracter) se muestran algunos
+    // usuarios existentes a modo de sugerencia, nunca la tabla completa, para no pagar el costo de
+    // traer todos los usuarios en cada apertura de la pantalla.
+    @Transactional(readOnly = true)
+    public List<UserSearchResult> search(String query) {
+        String trimmed = query == null ? "" : query.trim();
+        List<UserAccount> matches = trimmed.length() < 2
+                ? userAccountRepository.findTop10ByOrderByFullNameAsc()
+                : userAccountRepository.findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(
+                        trimmed, trimmed);
+        return matches.stream()
+                .map(account -> UserSearchResult.of(account, professionalRepository.existsById(account.getId())))
+                .toList();
     }
 }

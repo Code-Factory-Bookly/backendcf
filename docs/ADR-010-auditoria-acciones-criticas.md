@@ -236,6 +236,19 @@ dos veces la misma acción. Esa extensión se implementará antes de activar pro
 - Se establece que cualquier futura integración asíncrona requerirá actor durable e idempotencia.
 - El módulo `audit` no depende de clases concretas de `booking` ni de `auth`.
 
+## Criterios de aceptación de BD-01
+
+- Se define el modelo lógico de `audit_log` y su relación con `app_user`.
+- La tabla no crea FKs directas hacia `bookings` ni otros módulos de negocio.
+- Se definen tipos, nulabilidad, PK, FK y restricciones de dominio.
+- `occurred_at` usa `TIMESTAMPTZ` para conservar la zona horaria.
+- `metadata` se almacena como `JSONB`, con `{}` como valor por defecto y sin secretos.
+- Se define un índice para consultas por rango de fechas y orden determinista.
+- Se define un índice para consultas de trazabilidad por actor.
+- Se establece que no existe `ON DELETE CASCADE` sobre el actor.
+- Se documenta la protección de `UPDATE` y `DELETE` mediante trigger para la migración siguiente.
+- El SQL descrito es un diseño; todavía no se crea ni se ejecuta `V40__create_audit_log.sql`.
+
 ### 4. Persistencia e inmutabilidad
 
 La fuente de verdad será una tabla `audit_log`, creada mediante la migración `V40` asignada a Elena.
@@ -247,6 +260,86 @@ La tabla será append-only:
 - PostgreSQL rechazará `UPDATE` y `DELETE` sobre la tabla mediante una protección declarativa o
   procedural documentada en la migración, para que la inmutabilidad no dependa únicamente del código
   Java.
+
+#### Modelo lógico
+
+La bitácora se modela como una entidad independiente con una relación de muchos registros hacia el
+usuario que ejecutó la acción:
+
+```text
+app_user (1) ─────────────── (N) audit_log
+             actor_user_id
+```
+
+`audit_log` no tendrá relaciones con `bookings`, `servicios` ni otras tablas de negocio. El recurso
+afectado se identifica mediante `resource_type` y `resource_id` para evitar que la bitácora quede
+acoplada a módulos que todavía están evolucionando. La relación con el actor sí es una FK porque el
+actor es una cuenta existente y la integridad de esa identidad debe estar protegida por PostgreSQL.
+
+| Atributo | Tipo lógico | Nulabilidad | Regla |
+|---|---|---:|---|
+| `id` | UUID | No | Identificador único de la entrada; PK. |
+| `actor_user_id` | UUID | No | FK hacia `app_user(id)`; no se elimina en cascada. |
+| `action_type` | Enumeración | No | `BOOKING_CREATED`, `BOOKING_CANCELLED` o `ROLE_CHANGED`. |
+| `resource_type` | Enumeración | No | `BOOKING` o `USER`. |
+| `resource_id` | UUID | Sí | Identificador del recurso afectado cuando exista. |
+| `occurred_at` | Fecha-hora con zona | No | Momento de la acción, almacenado como `TIMESTAMPTZ`. |
+| `source_ip` | Dirección de red | Sí | IP de origen si está disponible; admite IPv4 e IPv6. |
+| `metadata` | Objeto JSON | No | Datos técnicos mínimos; por defecto `{}`. No contiene secretos. |
+
+`resource_id` se mantiene nullable porque el contrato debe poder representar una acción crítica sin
+recurso persistente en futuras extensiones. Para las tres acciones iniciales de HU-19 deberá informarse.
+La aplicación validará esa condición por tipo de acción antes de guardar, y la migración conservará las
+restricciones generales que corresponden a la base.
+
+#### Modelo físico propuesto
+
+La migración `V40__create_audit_log.sql` deberá materializar el siguiente esquema compatible con las
+convenciones actuales de PostgreSQL:
+
+```sql
+CREATE TABLE audit_log (
+    id UUID NOT NULL,
+    actor_user_id UUID NOT NULL,
+    action_type VARCHAR(40) NOT NULL,
+    resource_type VARCHAR(30) NOT NULL,
+    resource_id UUID,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    source_ip VARCHAR(45),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT pk_audit_log PRIMARY KEY (id),
+    CONSTRAINT ck_audit_log_action_type CHECK (
+        action_type IN ('BOOKING_CREATED', 'BOOKING_CANCELLED', 'ROLE_CHANGED')
+    ),
+    CONSTRAINT ck_audit_log_resource_type CHECK (
+        resource_type IN ('BOOKING', 'USER')
+    ),
+    CONSTRAINT fk_audit_log_actor FOREIGN KEY (actor_user_id)
+        REFERENCES app_user (id)
+);
+
+CREATE INDEX ix_audit_log_occurred_at_id
+    ON audit_log (occurred_at DESC, id DESC);
+
+CREATE INDEX ix_audit_log_actor_occurred_at
+    ON audit_log (actor_user_id, occurred_at DESC);
+```
+
+La columna `source_ip` usa `VARCHAR(45)` para mantener el contrato de aplicación independiente del tipo
+JDBC específico y cubrir la longitud máxima de una dirección IPv6 textual. La validación de formato de
+IP, cuando el dato esté disponible, corresponde a la aplicación; una IP ausente se permite porque no
+todos los registros necesariamente provendrán de una solicitud HTTP.
+
+El índice `ix_audit_log_occurred_at_id` soporta la consulta principal de HU-19 por rango de fechas y
+el orden determinista `occurred_at DESC, id DESC`. El índice por actor soporta investigaciones de
+trazabilidad sin agregar índices sobre cada columna de manera redundante.
+
+#### Inmutabilidad en la base
+
+Como parte de BD-02, la migración agregará una función y un trigger de PostgreSQL que rechacen
+`UPDATE` y `DELETE` sobre `audit_log`. La aplicación tampoco expondrá esas operaciones y el repositorio
+solo ofrecerá inserción y consulta. Esta doble protección evita que la inmutabilidad dependa de un único
+nivel.
 
 La eliminación de usuarios no debe eliminar sus registros de auditoría. La relación con `app_user`
 no utilizará `ON DELETE CASCADE`; si el modelo de usuarios cambia, debe conservarse la evidencia del

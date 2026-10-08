@@ -7,10 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
+import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.security.JwtTokenService;
 import com.bookly.backendcf.professional.application.ProfessionalQueryService;
 import com.bookly.backendcf.professional.presentation.dto.ProfessionalResponse;
-import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +33,9 @@ class ProfessionalListControllerSecurityTest {
 
     @Autowired
     private JwtTokenService tokenService;
+
+    @Autowired
+    private UserAccountRepository accountRepository;
 
     @MockitoBean
     private ProfessionalQueryService professionalQueryService;
@@ -65,11 +68,12 @@ class ProfessionalListControllerSecurityTest {
                 .andExpect(jsonPath("$[0].fullName").value("Sofia Prueba"));
     }
 
-    private String tokenFor(UserRole role) throws Exception {
-        UserAccount account = new UserAccount("admin@example.com", "hash", "Usuario de prueba", role);
-        Field idField = UserAccount.class.getDeclaredField("id");
-        idField.setAccessible(true);
-        idField.set(account, UUID.randomUUID());
-        return tokenService.createToken(account);
+    // El token solo lo acepta el filtro si la cuenta existe en la base (MantisBT BUG-005), asi que
+    // cada token de prueba necesita una cuenta real persistida, no un objeto solo en memoria.
+    private String tokenFor(UserRole role) {
+        UserAccount account = new UserAccount(
+                role.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com",
+                "hash", "Usuario de prueba", role);
+        return tokenService.createToken(accountRepository.save(account));
     }
 }

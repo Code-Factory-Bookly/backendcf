@@ -21,4 +21,10 @@ public record RegisterCustomerRequest(
         @NotBlank(message = "El nombre completo es obligatorio")
         @Size(max = 150, message = "El nombre completo no puede superar 150 caracteres")
         String fullName) {
+
+    // Recorta antes de validar @Email: sin esto, un correo con espacios al borde
+    // falla el formato en lugar de detectarse como duplicado (MantisBT BUG-001).
+    public RegisterCustomerRequest {
+        email = email == null ? null : email.strip();
+    }
 }

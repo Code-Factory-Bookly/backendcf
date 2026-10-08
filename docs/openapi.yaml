@@ -33,6 +33,10 @@ paths:
     post:
       tags: [Auth]
       summary: Iniciar sesión
+      description: >-
+        El 401 es deliberadamente el mismo para correo inexistente, cuenta deshabilitada, cuenta
+        bloqueada por intentos fallidos y contraseña incorrecta: no distinguir el motivo evita que
+        un tercero pueda enumerar que correos tienen cuenta en la plataforma.
       operationId: login
       requestBody:
         required: true
@@ -47,7 +51,6 @@ paths:
               schema: { $ref: '#/components/schemas/LoginResponse' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '423': { $ref: '#/components/responses/LockedError' }
   /platform/setup:
     post:
       tags: [Platform]
@@ -172,7 +175,8 @@ paths:
         Solo ADMIN. Cambia el rol de la cuenta entre CUSTOMER, PROFESSIONAL y ADMIN (HU-17). Para
         asignar PROFESSIONAL a una cuenta sin perfil se requiere la especialidad y se crea el perfil.
         Una cuenta con perfil profesional no puede cambiar a otro rol (409 ROLE_CHANGE_CONFLICT). El
-        token que ya emitió el usuario conserva el rol anterior hasta que expire.
+        rol se revisa contra la base de datos en cada petición, no contra el token: un cambio de rol
+        aplica de inmediato en la siguiente petición del usuario, sin esperar a que su token expire.
         Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 403 ACCESS_DENIED, 404 USER_NOT_FOUND y 409
         ROLE_CHANGE_CONFLICT o SPECIALTY_REQUIRED.
       operationId: assignUserRole
@@ -410,5 +414,4 @@ components:
     ConflictError: { description: Conflicto de integridad o estado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     UnauthorizedError: { description: Autenticación requerida, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     ForbiddenError: { description: Permisos insuficientes, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
-    LockedError: { description: Cuenta bloqueada, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     NotFoundError: { description: Recurso no encontrado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

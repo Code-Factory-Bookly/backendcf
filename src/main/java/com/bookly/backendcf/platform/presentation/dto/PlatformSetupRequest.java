@@ -25,4 +25,9 @@ public record PlatformSetupRequest(
         @NotBlank(message = "El nombre completo del administrador es obligatorio")
         @Size(max = 150, message = "El nombre completo no puede superar 150 caracteres")
         String adminFullName) {
+
+    // Mismo motivo que RegisterCustomerRequest: recorta antes de @Email (MantisBT BUG-001).
+    public PlatformSetupRequest {
+        adminEmail = adminEmail == null ? null : adminEmail.strip();
+    }
 }

@@ -1,18 +1,26 @@
 package com.bookly.backendcf.auth.security;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
-import java.util.Base64;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.Date;
+import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+/**
+ * Firma y valida los JWT con jjwt (RFC 7519) en lugar de un parser manual (SEC-001): la librería
+ * fija el algoritmo a partir de la clave (rechaza "alg":"none" y confusion attacks) y usa un
+ * parser JSON real en vez de busquedas con indexOf.
+ */
 @Service
 public class JwtTokenService {
-    private final byte[] secret;
+    private static final int MIN_SECRET_LENGTH = 64;
+
+    private final SecretKey key;
     private final long expiresInSeconds;
 
     public JwtTokenService(@Value("${security.jwt.secret:}") String secret,
@@ -20,55 +28,41 @@ public class JwtTokenService {
         if (secret.isBlank()) {
             throw new IllegalArgumentException("JWT_SECRET debe estar configurado y ser persistente");
         }
-        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
-            throw new IllegalArgumentException("security.jwt.secret debe tener al menos 32 bytes");
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalArgumentException(
+                    "security.jwt.secret debe tener al menos " + MIN_SECRET_LENGTH + " caracteres");
         }
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiresInSeconds = expiresInSeconds;
     }
 
     public long getExpiresInSeconds() { return expiresInSeconds; }
 
     public String createToken(UserAccount account) {
-        long expiry = Instant.now().getEpochSecond() + expiresInSeconds;
-        String header = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
-        String payload = encode("{\"sub\":\"" + account.getId() + "\",\"email\":\""
-                + escape(account.getEmail()) + "\",\"role\":\"" + account.getRole() + "\",\"exp\":" + expiry + "}");
-        String unsigned = header + "." + payload;
-        return unsigned + "." + sign(unsigned);
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(account.getId().toString())
+                .claim("email", account.getEmail())
+                .claim("role", account.getRole().name())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(expiresInSeconds)))
+                .signWith(key, Jwts.SIG.HS256)
+                .compact();
     }
 
     public TokenClaims parse(String token) {
         try {
-            String[] parts = token.split("\\.", -1);
-            if (parts.length != 3 || !MessageDigest.isEqual(sign(parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII),
-                    parts[2].getBytes(StandardCharsets.US_ASCII))) return null;
-            String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
-            String subject = value(payload, "sub");
-            String role = value(payload, "role");
-            long exp = Long.parseLong(value(payload, "exp"));
-            if (Instant.now().getEpochSecond() >= exp) return null;
-            return new TokenClaims(subject, role);
-        } catch (Exception ignored) { return null; }
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return new TokenClaims(claims.getSubject(), claims.get("role", String.class));
+        } catch (RuntimeException ignored) {
+            // Cualquier token invalido o malformado se trata igual: acceso no autenticado.
+            return null;
+        }
     }
 
-    private String sign(String value) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception exception) { throw new IllegalStateException("No se pudo firmar el token", exception); }
-    }
-    private String encode(String value) { return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8)); }
-    private String escape(String value) { return value.replace("\\", "\\\\").replace("\"", "\\\""); }
-    private String value(String json, String key) {
-        String prefix = "\"" + key + "\":";
-        int start = json.indexOf(prefix) + prefix.length();
-        if (start <= prefix.length() - 1) throw new IllegalArgumentException();
-        if (json.charAt(start) == '\"') start++;
-        int end = json.indexOf(json.charAt(start - 1) == '\"' ? '\"' : ',', start);
-        if (end < 0) end = json.indexOf('}', start);
-        return json.substring(start, end);
-    }
     public record TokenClaims(String subject, String role) { }
 }

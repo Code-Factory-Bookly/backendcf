@@ -1,7 +1,6 @@
 package com.bookly.backendcf.shared.error;
 
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
-import com.bookly.backendcf.auth.application.AccountLockedException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
@@ -14,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,6 +29,23 @@ public class GlobalExceptionHandler {
                 "VALIDATION_ERROR",
                 "El request contiene datos inválidos",
                 details);
+    }
+
+    // MantisBT BUG-002: sin este handler, un path variable con formato invalido (ej. un UUID mal
+    // escrito) queda sin resolver, Spring reenvia internamente a /error, y como esa ruta no esta en
+    // la lista permitAll de SecurityConfiguration, el filtro de seguridad la rechaza con 401 en vez
+    // del 400 real. Resolverlo aqui evita que la peticion llegue a pasar por /error.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        String parameter = exception.getName();
+        String expectedType = exception.getRequiredType() != null
+                ? exception.getRequiredType().getSimpleName()
+                : "el tipo esperado";
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                "El request contiene datos inválidos",
+                Map.of(parameter, "El valor de '" + parameter + "' no tiene el formato de " + expectedType));
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
@@ -53,12 +70,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException exception) {
         return buildResponse(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", exception.getMessage(), Map.of());
-    }
-
-    @ExceptionHandler(AccountLockedException.class)
-    public ResponseEntity<ApiErrorResponse> handleAccountLocked(AccountLockedException exception) {
-        return buildResponse(HttpStatus.LOCKED, "ACCOUNT_LOCKED", exception.getMessage(),
-                Map.of("lockedUntil", exception.getLockedUntil().toString()));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

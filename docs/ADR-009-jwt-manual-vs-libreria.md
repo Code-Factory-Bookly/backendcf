@@ -65,6 +65,23 @@ plan de resolución en Sprint 2.
   sobre `JwtTokenServiceTest` pasa sin modificar el archivo de test.
 - No se introduce ninguna dependencia nueva en Sprint 1 — cero riesgo de romper el cierre del sprint.
 
+## Resolución (Sprint 2)
+
+Migración ejecutada: `JwtTokenService` ahora usa `io.jsonwebtoken` (jjwt 0.13.0) en vez del parser
+manual, en el mismo cambio que cierra SEC-001 del reporte de seguridad de QA (2026-10-02) y BUG-005
+(`JwtAuthenticationFilter` no validaba contra la base de datos).
+
+El criterio de aceptación original (`JwtTokenServiceTest` sin modificar) **no se cumplió tal cual**:
+el archivo de test sí cambió, porque la migración también subió el mínimo del secreto de 32 a 64
+caracteres (recomendación explícita de SEC-001 vector 3, no solo los vectores 1 y 2). Eso obligó a
+actualizar los secretos de prueba usados en varios tests. El contrato observable (`createToken`/
+`parse`) no cambió: los mismos escenarios siguen cubiertos, más uno nuevo que reproduce el PoC de
+`alg:none` del reporte.
+
+Consecuencia operativa: `JWT_SECRET` en Render debe tener al menos 64 caracteres antes de este
+deploy. El valor generado en el deploy anterior (vía `openssl rand -base64 32`, ~44 caracteres) no
+alcanza y debe rotarse.
+
 ## Trazabilidad
 
 - Código: `src/main/java/com/bookly/backendcf/auth/security/JwtTokenService.java`.

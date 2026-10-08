@@ -3,7 +3,6 @@ package com.bookly.backendcf.booking.application.service;
 import com.bookly.backendcf.booking.application.exception.BookingConflictException;
 import com.bookly.backendcf.booking.domain.model.Booking;
 import com.bookly.backendcf.booking.domain.model.BookingStatus;
-import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

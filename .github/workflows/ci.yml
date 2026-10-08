@@ -1,3 +1,4 @@
+
 name: CI
 
 on:
@@ -9,10 +10,26 @@ on:
 jobs:
   build-test-sonar:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bookly_test
+          POSTGRES_USER: bookly_test
+          POSTGRES_PASSWORD: bookly_test_local_2026
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U bookly_test -d bookly_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Obtener codigo
+        uses: actions/checkout@v4
         with:
-          # SonarCloud necesita el historial completo para el análisis de "new code"
           fetch-depth: 0
 
       - name: Configurar JDK 17
@@ -29,21 +46,23 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # Etapa "Validación" (lineamiento 7.2): compila y falla rápido si no compila.
+      - name: Verificar conexion PostgreSQL
+        env:
+          PGPASSWORD: bookly_test_local_2026
+        run: |
+          pg_isready -h localhost -p 55432 -U bookly_test -d bookly_test
+          psql -h localhost -p 55432 -U bookly_test -d bookly_test \
+            -c "SELECT current_database(), version();"
+
       - name: Compilar
         run: ./mvnw -B compile
 
-      # Etapa "Calidad" (lineamiento 7.2): tests + cobertura (JaCoCo) + Quality Gate de SonarCloud.
       - name: Tests y cobertura
-        run: ./mvnw -B test
+        run: ./mvnw -B clean test
 
-      - name: Análisis SonarCloud
+      - name: Analisis SonarCloud
         continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
-
-      # No falla el build todavía si el Quality Gate no pasa — eso se activa como
-      # "required status check" en branch protection una vez que el equipo confirme
-      # que el Gate está bien calibrado (ver HANDOFF, sección 7).

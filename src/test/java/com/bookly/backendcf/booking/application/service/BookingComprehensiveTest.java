@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.UUID;
@@ -25,7 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class BookingComprehensiveTest {
+class BookingComprehensiveTestFinal {
 
     @Mock
     private BookingRepository bookingRepository;
@@ -68,6 +69,60 @@ class BookingComprehensiveTest {
         Booking booking = new Booking(customerId, professionalId, serviceId, startTime, endTime);
         booking.setStatus(BookingStatus.CONFIRMADA);
         assertEquals(BookingStatus.CONFIRMADA, booking.getStatus());
+    }
+
+    @Test
+    void bookingAllGettersAccessed() {
+        Booking booking = new Booking(customerId, professionalId, serviceId, startTime, endTime);
+
+        assertNotNull(booking.getCustomerId());
+        assertNotNull(booking.getProfessionalId());
+        assertNotNull(booking.getServiceId());
+        assertNotNull(booking.getStartTime());
+        assertNotNull(booking.getEndTime());
+        assertNotNull(booking.getStatus());
+        assertNotNull(booking.getCreatedAt());
+        assertNotNull(booking.getUpdatedAt());
+        assertNull(booking.getCancelledAt());
+        assertNull(booking.getCancellationReason());
+    }
+
+    @Test
+    void bookingEmptyConstructor() {
+        Booking booking = new Booking();
+        assertNotNull(booking);
+    }
+
+    @Test
+    void bookingSettersWorkCorrectly() {
+        Booking booking = new Booking();
+
+        booking.setStatus(BookingStatus.CONFIRMADA);
+        assertEquals(BookingStatus.CONFIRMADA, booking.getStatus());
+
+        LocalDateTime now = LocalDateTime.now();
+        booking.setUpdatedAt(now);
+        assertEquals(now, booking.getUpdatedAt());
+
+        LocalDateTime cancelled = LocalDateTime.now();
+        booking.setCancelledAt(cancelled);
+        assertEquals(cancelled, booking.getCancelledAt());
+
+        String reason = "Customer requested";
+        booking.setCancellationReason(reason);
+        assertEquals(reason, booking.getCancellationReason());
+
+        booking.setStartTime(startTime);
+        assertEquals(startTime, booking.getStartTime());
+
+        booking.setEndTime(endTime);
+        assertEquals(endTime, booking.getEndTime());
+    }
+
+    @Test
+    void bookingGetId() {
+        Booking booking = new Booking();
+        assertNull(booking.getId());
     }
 
     // ===== CreateBookingService Tests =====
@@ -141,10 +196,46 @@ class BookingComprehensiveTest {
         );
     }
 
+    @Test
+    void shouldHandleUniqueConstraintViolation() {
+        when(bookingRepository.findOverlappingBookings(professionalId, startTime, endTime))
+                .thenReturn(Collections.emptyList());
+
+        when(bookingRepository.save(any(Booking.class)))
+                .thenThrow(new org.hibernate.exception.ConstraintViolationException(
+                        "Violation", new SQLException(), "unique_booking_per_professional_time"
+                ));
+
+        assertThrows(BookingConflictException.class, () ->
+                service.createBooking(customerId, professionalId, serviceId, startTime, endTime)
+        );
+    }
+
     // ===== DTO Tests =====
     @Test
     void createBookingRequestConstructorWorks() {
         CreateBookingRequest request = new CreateBookingRequest(professionalId, serviceId, startTime, endTime);
+
+        assertEquals(professionalId, request.getProfessionalId());
+        assertEquals(serviceId, request.getServiceId());
+        assertEquals(startTime, request.getStartTime());
+        assertEquals(endTime, request.getEndTime());
+    }
+
+    @Test
+    void createBookingRequestEmptyConstructor() {
+        CreateBookingRequest request = new CreateBookingRequest();
+        assertNotNull(request);
+    }
+
+    @Test
+    void createBookingRequestSetters() {
+        CreateBookingRequest request = new CreateBookingRequest();
+
+        request.setProfessionalId(professionalId);
+        request.setServiceId(serviceId);
+        request.setStartTime(startTime);
+        request.setEndTime(endTime);
 
         assertEquals(professionalId, request.getProfessionalId());
         assertEquals(serviceId, request.getServiceId());
@@ -165,6 +256,7 @@ class BookingComprehensiveTest {
         assertEquals(bookingId, response.getId());
         assertEquals(customerId, response.getCustomerId());
         assertEquals("CONFIRMADA", response.getStatus());
+        assertEquals(createdAt, response.getCreatedAt());
     }
 
     // ===== BookingStatus Enum Tests =====
@@ -174,12 +266,33 @@ class BookingComprehensiveTest {
         assertEquals("CONFIRMADA", BookingStatus.CONFIRMADA.toString());
     }
 
+    @Test
+    void bookingStatusValueOf() {
+        BookingStatus status = BookingStatus.valueOf("CONFIRMADA");
+        assertEquals(BookingStatus.CONFIRMADA, status);
+    }
+
     // ===== Exception Tests =====
     @Test
     void bookingConflictExceptionWithErrorCode() {
         BookingConflictException ex = new BookingConflictException("TEST_CODE", "Test message");
         assertEquals("TEST_CODE", ex.getErrorCode());
         assertEquals("Test message", ex.getMessage());
+    }
+
+    // ===== Event Publisher Tests =====
+    @Test
+    void bookingEventPublisherIntegration() {
+        when(bookingRepository.findOverlappingBookings(professionalId, startTime, endTime))
+                .thenReturn(Collections.emptyList());
+
+        Booking mockBooking = new Booking(customerId, professionalId, serviceId, startTime, endTime);
+        mockBooking.setStatus(BookingStatus.CONFIRMADA);
+        when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
+
+        service.createBooking(customerId, professionalId, serviceId, startTime, endTime);
+
+        verify(eventPublisher).publish(any(BookingCreatedEvent.class));
     }
 
     // ===== Edge Cases =====
@@ -224,5 +337,35 @@ class BookingComprehensiveTest {
         Booking result = service.createBooking(customerId, professionalId, serviceId, startTime, longEnd);
 
         assertNotNull(result);
+    }
+
+    @Test
+    void shouldVerifyRepositoryMethodsCalled() {
+        when(bookingRepository.findOverlappingBookings(professionalId, startTime, endTime))
+                .thenReturn(Collections.emptyList());
+
+        Booking mockBooking = new Booking(customerId, professionalId, serviceId, startTime, endTime);
+        when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
+
+        service.createBooking(customerId, professionalId, serviceId, startTime, endTime);
+
+        verify(bookingRepository).findOverlappingBookings(professionalId, startTime, endTime);
+        verify(bookingRepository).save(any(Booking.class));
+    }
+
+    @Test
+    void bookingCreatedEventHasAllDetails() {
+        UUID bookingId = UUID.randomUUID();
+        BookingCreatedEvent event = new BookingCreatedEvent(
+                bookingId, customerId, professionalId, serviceId, startTime, endTime
+        );
+
+        assertEquals(bookingId, event.getBookingId());
+        assertEquals(customerId, event.getCustomerId());
+        assertEquals(professionalId, event.getProfessionalId());
+        assertEquals(serviceId, event.getServiceId());
+        assertEquals(startTime, event.getStartTime());
+        assertEquals(endTime, event.getEndTime());
+        assertNotNull(event.getOccurredAt());
     }
 }

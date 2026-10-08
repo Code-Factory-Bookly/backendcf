@@ -137,8 +137,16 @@ Las siguientes propiedades pueden definirse como variables de entorno:
 | `JWT_EXPIRATION_SECONDS` | `3600` | Duración del token |
 | `LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `LOGIN_LOCK_MINUTES` | `15` | Duración del bloqueo |
+| `MFA_ENCRYPTION_KEY` | obligatorio | Clave AES-256 (32 bytes en base64) para cifrar el secreto TOTP de cada cuenta ADMIN con MFA activo |
 
-`JWT_SECRET` debe definirse en `.env` a partir de `.env.example` y conservarse entre reinicios. En producción, esta clave, las credenciales de base de datos y demás secretos deben gestionarse fuera del código y del repositorio.
+`JWT_SECRET` y `MFA_ENCRYPTION_KEY` deben definirse en `.env` a partir de `.env.example` y conservarse entre reinicios (y entre despliegues). Ambas se generan con:
+
+```bash
+openssl rand -base64 48   # JWT_SECRET: cualquier longitud >= 32 bytes
+openssl rand -base64 32   # MFA_ENCRYPTION_KEY: debe decodificar a exactamente 32 bytes (AES-256)
+```
+
+Si `MFA_ENCRYPTION_KEY` cambia, los secretos TOTP ya cifrados en la base quedan indescifrables y todas las cuentas ADMIN con el segundo factor activo pierden acceso (deben reenrolar). En producción, esta clave, las credenciales de base de datos y demás secretos deben gestionarse fuera del código y del repositorio.
 
 ## API de autenticación
 

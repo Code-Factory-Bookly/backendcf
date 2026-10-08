@@ -40,7 +40,11 @@ public class PasswordResetService {
     public String resetToTemporaryPassword(UUID userId) {
         UserAccount account = accounts.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
         String temporary = generateTemporaryPassword();
-        account.updatePassword(passwordEncoder.encode(temporary), OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now();
+        account.updatePassword(passwordEncoder.encode(temporary), now);
+        // El motivo mas comun para resetear la clave es justamente que la cuenta quedo bloqueada;
+        // sin esto, la clave temporal no serviria de nada hasta que el bloqueo expire solo.
+        account.registerSuccessfulLogin(now);
         accounts.save(account);
         return temporary;
     }

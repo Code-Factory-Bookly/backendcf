@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,17 @@ class PasswordResetServiceTest {
                 .containsPattern("[0-9]").containsPattern("[^A-Za-z0-9]");
         assertThat(new BCryptPasswordEncoder().matches(temporary, account.getPasswordHash())).isTrue();
         verify(accounts).save(account);
+    }
+
+    @Test
+    void resetDeClaveDesbloqueaUnaCuentaBloqueada() {
+        account.registerFailedLogin(OffsetDateTime.now(), 1, 15);
+        assertThat(account.isLocked(OffsetDateTime.now())).isTrue();
+
+        service.resetToTemporaryPassword(userId);
+
+        assertThat(account.isLocked(OffsetDateTime.now())).isFalse();
+        assertThat(account.getFailedLoginAttempts()).isZero();
     }
 
     @Test

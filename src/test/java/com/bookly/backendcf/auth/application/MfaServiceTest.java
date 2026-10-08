@@ -45,6 +45,7 @@ class MfaServiceTest {
     private JwtTokenService tokens;
     private MfaService service;
     private UserAccount admin;
+    private DeviceTrustService deviceTrustService;
 
     @BeforeEach
     void setUp() {
@@ -53,7 +54,7 @@ class MfaServiceTest {
         attempts = mock(LoginAttemptRecorder.class);
         cipher = new TotpSecretCipher(ENCRYPTION_KEY);
         tokens = new JwtTokenService(JWT_SECRET, 3600);
-        DeviceTrustService deviceTrustService = mock(DeviceTrustService.class);
+        deviceTrustService = mock(DeviceTrustService.class);
         service = new MfaService(accounts, recoveryCodes, cipher, new BCryptPasswordEncoder(), tokens,
                 attempts, deviceTrustService, 5, 15);
 
@@ -114,6 +115,84 @@ class MfaServiceTest {
         assertEquals(admin.getId(), verified.getId());
         assertTrue(recovery.isUsed());
         assertFalse(verified.isLocked(OffsetDateTime.now()));
+    }
+
+    @Test
+    void regenerarCodigosConCodigoValidoReemplazaLosAnteriores() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+
+        List<String> codes = service.regenerateRecoveryCodes(admin.getId(), currentCode(secret));
+
+        assertEquals(10, codes.size());
+        verify(recoveryCodes).deleteByUserId(admin.getId());
+    }
+
+    @Test
+    void regenerarCodigosSinMfaActivoFalla() {
+        assertThrows(InvalidMfaTokenException.class,
+                () -> service.regenerateRecoveryCodes(admin.getId(), "123456"));
+    }
+
+    @Test
+    void regenerarCodigosConCodigoIncorrectoRegistraIntentoFallido() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+
+        assertThrows(InvalidMfaCodeException.class,
+                () -> service.regenerateRecoveryCodes(admin.getId(), "000000"));
+        verify(recoveryCodes, org.mockito.Mockito.never()).deleteByUserId(any());
+    }
+
+    @Test
+    void desactivarConContrasenaYCodigoValidosLimpiaElSegundoFactor() {
+        String rawPassword = "Valid1!pass";
+        UserAccount enrolled = new UserAccount(
+                "admin2@example.com", new BCryptPasswordEncoder().encode(rawPassword), "Admin", UserRole.ADMIN);
+        ReflectionTestUtils.setField(enrolled, "id", UUID.randomUUID());
+        String secret = new DefaultSecretGenerator().generate();
+        enrolled.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        enrolled.confirmMfaEnrollment(OffsetDateTime.now());
+        when(accounts.findById(enrolled.getId())).thenReturn(Optional.of(enrolled));
+
+        service.disable(enrolled.getId(), rawPassword, currentCode(secret));
+
+        assertFalse(enrolled.isMfaEnabled());
+        verify(recoveryCodes).deleteByUserId(enrolled.getId());
+        verify(deviceTrustService).revokeAll(enrolled.getId());
+    }
+
+    @Test
+    void desactivarConContrasenaIncorrectaFalla() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+
+        assertThrows(InvalidCredentialsException.class,
+                () -> service.disable(admin.getId(), "Incorrecta1!", currentCode(secret)));
+        assertTrue(admin.isMfaEnabled());
+        verify(deviceTrustService, org.mockito.Mockito.never()).revokeAll(any());
+    }
+
+    @Test
+    void omitirLaConfiguracionEntregaSesionSinActivarMfa() {
+        String mfaToken = tokens.createMfaPendingToken(admin);
+
+        UserAccount result = service.skipEnrollment(mfaToken);
+
+        assertEquals(admin.getId(), result.getId());
+        assertFalse(result.isMfaEnabled());
+        assertEquals(0, result.getFailedLoginAttempts());
+    }
+
+    @Test
+    void omitirLaConfiguracionConMfaYaActivoFalla() {
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+        String mfaToken = tokens.createMfaPendingToken(admin);
+
+        assertThrows(InvalidMfaTokenException.class, () -> service.skipEnrollment(mfaToken));
     }
 
     private String currentCode(String secret) {

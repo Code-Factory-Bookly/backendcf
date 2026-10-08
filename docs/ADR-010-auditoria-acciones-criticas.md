@@ -105,6 +105,137 @@ Si una integración asíncrona se adopta posteriormente, deberá utilizar un eve
 garantía equivalente para no perder la auditoría después de confirmar la operación de negocio. Esa
 decisión queda fuera de ARQ-01 y no se introduce un broker en este sprint.
 
+## Flujo de registro de acciones exitosas
+
+ARQ-03 define el momento y la responsabilidad de cada integración. La auditoría no se registra desde
+los controladores REST ni antes de confirmar la operación principal.
+
+### Flujo común
+
+```text
+Solicitud autenticada
+        │
+        ▼
+Caso de uso valida reglas de negocio
+        │
+        ├── error ──► rollback / respuesta de error / sin auditoría exitosa
+        │
+        ▼
+Persistencia de la operación principal
+        │
+        ├── error ──► rollback / respuesta de error / sin auditoría exitosa
+        │
+        ▼
+Construcción de AuditAction
+        │
+        ▼
+AuditRecorder.record(action)
+        │
+        ├── error ──► rollback de la transacción de negocio
+        │
+        ▼
+Respuesta exitosa y evidencia de auditoría persistida
+```
+
+Cuando la operación principal y la auditoría sean transaccionales, ambas deben confirmarse como una
+unidad. No se debe devolver una respuesta exitosa de negocio si la auditoría obligatoria no pudo
+persistirse. Si el equipo decide posteriormente tolerar fallos de auditoría, deberá crear otra ADR y
+definir un mecanismo durable de reintento; no se asumirá esa tolerancia silenciosamente.
+
+### Creación de reserva: `BOOKING_CREATED`
+
+HU-08 ya publica `BookingCreatedEvent` mediante `BookingEventPublisher`. El adaptador de integración
+de reservas será responsable de:
+
+1. recibir el evento después de que la reserva haya sido guardada;
+2. construir un `AuditAction` con `actionType = BOOKING_CREATED`;
+3. usar `resourceType = BOOKING` y el identificador de la reserva como `resourceId`;
+4. obtener el actor autenticado del contexto validado de la solicitud;
+5. invocar `AuditRecorder.record(action)` dentro del límite transaccional de la operación.
+
+El módulo `audit` no importará clases del paquete `booking`. El adaptador podrá vivir en el módulo de
+reservas o en una capa de integración que conozca `BookingCreatedEvent` y dependa del puerto
+`AuditRecorder`.
+
+### Cancelación de reserva: `BOOKING_CANCELLED`
+
+HU-09 deberá publicar `BookingCancelledEvent` cuando la cancelación haya sido validada y persistida.
+El adaptador seguirá el mismo flujo de creación, cambiando únicamente:
+
+- `actionType = BOOKING_CANCELLED`;
+- `resourceType = BOOKING`;
+- `resourceId = bookingId`;
+- `metadata`, que podrá incluir la razón de cancelación si no contiene datos sensibles.
+
+Una cancelación rechazada por una regla de negocio, por ejemplo una política de anticipación, no genera
+una entrada de cancelación exitosa.
+
+### Cambio de rol: `ROLE_CHANGED`
+
+HU-17 ya está integrado en `main` mediante `RoleAssignmentService`. Después de persistir un cambio real
+de rol, el caso de uso deberá construir una acción con:
+
+- `actionType = ROLE_CHANGED`;
+- `resourceType = USER`;
+- `resourceId = userId` del usuario cuyo rol cambió;
+- `actorUserId` igual al usuario autenticado que ejecutó la administración;
+- `metadata` con el rol anterior y el nuevo rol, sin incluir credenciales.
+
+Si el usuario solicita el mismo rol que ya tenía, no existe cambio efectivo y no se registra
+`ROLE_CHANGED`. Si la operación falla, tampoco se registra.
+
+### Identidad del actor
+
+El actor es quien ejecuta la operación, no necesariamente el usuario afectado. Por eso no se debe usar
+automáticamente `customerId` ni `resourceId` como `actorUserId`.
+
+En el monolito actual, el actor se obtiene del contexto de seguridad que ya validó el JWT contra la
+cuenta persistida. La capa de aplicación deberá recibir esa identidad mediante un puerto o servicio de
+contexto de actor, evitando acoplar el dominio directamente a `SecurityContextHolder`.
+
+Los eventos actuales de HU-08 contienen el identificador de la reserva y datos de negocio, pero no
+declaran explícitamente el actor. Mientras los eventos sean síncronos y se publiquen dentro de la
+solicitud autenticada, el adaptador puede resolver el actor desde el contexto de la solicitud. Si se
+convierten en eventos asíncronos, el contrato deberá incluir `actorUserId` y conservarlo de forma
+durable; no se intentará reconstruir el actor después de perder el contexto HTTP.
+
+### Conversión de fechas
+
+Los eventos actuales de HU-08 exponen `LocalDateTime`, mientras `AuditAction` requiere
+`OffsetDateTime`. La conversión se realizará en el adaptador de integración, usando UTC como convención
+del sistema, hasta que el contrato de eventos se unifique. La base de datos conservará la fecha con zona
+horaria.
+
+### Idempotencia y duplicados
+
+En este sprint los eventos se procesan de forma síncrona y una vez dentro de la transacción. Si en el
+futuro se habilitan reintentos o entrega asíncrona, el contrato deberá incluir un identificador de
+evento o una clave de idempotencia. La tabla y el caso de uso deberán impedir que un reintento registre
+dos veces la misma acción. Esa extensión se implementará antes de activar procesamiento asíncrono.
+
+### Responsabilidades por módulo
+
+| Módulo | Responsabilidad |
+|---|---|
+| `booking` | Publicar eventos de creación, reprogramación y cancelación después de validar la operación. |
+| `auth` | Publicar o solicitar auditoría después de un cambio real de rol. |
+| `audit` | Validar el contrato, persistir la acción y exponer la consulta administrativa. |
+| `shared/security` | Proporcionar la identidad autenticada validada al caso de uso. |
+| PostgreSQL | Conservar la evidencia y rechazar modificaciones o eliminaciones de la bitácora. |
+
+## Criterios de aceptación de ARQ-03
+
+- Se documenta un flujo común desde la solicitud hasta la persistencia de la auditoría.
+- Una operación fallida no genera una acción crítica exitosa.
+- Se define el flujo para `BOOKING_CREATED` usando el contrato publicado por HU-08.
+- Se define el flujo para `BOOKING_CANCELLED`, que será publicado por HU-09.
+- Se define el flujo para `ROLE_CHANGED` usando HU-17 ya integrado en `main`.
+- Se distingue entre el actor que ejecuta la acción y el recurso afectado.
+- Se define cómo obtener el actor sin confiar directamente en datos no validados del JWT.
+- Se documenta la conversión de `LocalDateTime` a `OffsetDateTime` en el límite de integración.
+- Se establece que cualquier futura integración asíncrona requerirá actor durable e idempotencia.
+- El módulo `audit` no depende de clases concretas de `booking` ni de `auth`.
+
 ### 4. Persistencia e inmutabilidad
 
 La fuente de verdad será una tabla `audit_log`, creada mediante la migración `V40` asignada a Elena.

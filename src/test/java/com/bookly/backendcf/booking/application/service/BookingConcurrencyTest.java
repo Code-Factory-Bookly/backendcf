@@ -74,7 +74,8 @@ class BookingConcurrencyTest {
             jdbc.update("DELETE FROM bookings WHERE professional_id=?", professional);
             jdbc.update("DELETE FROM profesionales WHERE id=?", professional);
             jdbc.update("DELETE FROM servicios WHERE id=?", service);
-            jdbc.update("DELETE FROM app_user WHERE id IN (?, ?, ?)", customerX, customerY, professional);
+            // audit_log es append-only y conserva la FK de los actores auditados; por eso
+            // los usuarios de esta prueba no se eliminan durante la limpieza.
         }
     }
 

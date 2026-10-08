@@ -215,6 +215,21 @@ export SONAR_TOKEN=$(cat ~/.sonar_token)
 
 ## 10. Pendientes de evolución
 
+### HU-19 — Registro de auditoría de acciones críticas
+
+La integración funcional disponible quedó cubierta así:
+
+| Acción | Adaptador | Evidencia automatizada |
+|---|---|---|
+| `BOOKING_CREATED` | `BookingCreatedAuditListener` | `BookingCreatedAuditListenerTest` |
+| `ROLE_CHANGED` | `RoleChangedAuditListener` | `RoleChangedAuditListenerTest`, `RoleAssignmentServiceTest` |
+| `BOOKING_CANCELLED` | Pendiente de HU-09 | No existe todavía el evento consumidor en `main` |
+
+La auditoría se publica de forma síncrona dentro de la transacción de negocio. Si la persistencia de
+la bitácora falla, la operación de negocio no debe confirmarse. La persistencia e inmutabilidad de
+PostgreSQL se validan adicionalmente con `AuditLogPersistenceTest` y
+`docs/evidencia/HU-19-integridad.sql`.
+
 Para continuar el cierre de Sprint 1: mantener la cobertura y corregir el patrón de carrera check-then-act en `RegisterCustomerService`/`PlatformSetupService`/`ServiceOfferingService` (usando como referencia la corrección ya aplicada en `RegisterProfessionalService`). HU-06, HU-22 y la cobertura de `JwtTokenService` ya están integradas.
 
 **Resuelto el 2026-09-21:** la anomalía de HU-21 en el tablero de Azure DevOps (work item 32) — estaba sin Sprint asignado pese a estar mergeada desde el PR #13. Ya se movió a `Sprint 1` vía API. El `State` se dejó en `Active` a propósito (no se cerró unilateralmente el work item de David; falta que él lo pase a `Closed`).

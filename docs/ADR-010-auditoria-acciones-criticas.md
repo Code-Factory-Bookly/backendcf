@@ -271,9 +271,20 @@ depende directamente de Spring Data JPA. La entidad `audit/domain/model/AuditLog
 desde el modelo de aplicación: no expone setters ni operaciones de actualización o eliminación.
 
 La persistencia se conecta mediante `audit/infrastructure/persistence/AuditLogRepositoryAdapter.java` y
-`AuditLogRepository.java`. La integración con eventos de reservas y con `RoleAssignmentService` queda
-para las tasks posteriores; este caso de uso puede ser invocado por esos módulos sin que `audit` dependa
-de sus clases concretas.
+`AuditLogRepository.java`. La integración se realiza desde los módulos consumidores: HU-08 adapta
+`BookingCreatedEvent` y HU-17 adapta `RoleChangedEvent` hacia el puerto `AuditRecorder`, sin que
+`audit` dependa de sus clases concretas. La adaptación de `BookingCancelledEvent` queda pendiente de
+HU-09, que todavía no está integrada en `main`.
+
+La integración de HU-08 se implementa en
+`booking/infrastructure/event/BookingCreatedAuditListener.java`. El evento se publica de forma
+síncrona dentro de la transacción de creación; el `customerId` del evento representa al actor
+autenticado que creó la reserva, y la fecha sin zona se convierte a UTC en el límite de integración.
+
+La integración de HU-17 se implementa mediante `RoleChangedEvent`, publicado después de persistir un
+cambio real de rol, y `auth/infrastructure/event/RoleChangedAuditListener.java`. El actor se obtiene
+del contexto de seguridad validado mediante `ActorIdentityProvider`, mientras el usuario afectado se
+mantiene como `resourceId`. Si el rol solicitado ya era el vigente, no se publica ningún evento.
 
 ## Implementación de ARQ-05
 

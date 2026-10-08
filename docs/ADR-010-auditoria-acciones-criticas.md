@@ -247,7 +247,14 @@ dos veces la misma acción. Esa extensión se implementará antes de activar pro
 - Se define un índice para consultas de trazabilidad por actor.
 - Se establece que no existe `ON DELETE CASCADE` sobre el actor.
 - Se documenta la protección de `UPDATE` y `DELETE` mediante trigger para la migración siguiente.
-- El SQL descrito es un diseño; todavía no se crea ni se ejecuta `V40__create_audit_log.sql`.
+- El SQL descrito se materializa en `V40__create_audit_log.sql`, sin editar migraciones anteriores.
+
+## Implementación de BD-02
+
+La migración ejecutable se encuentra en
+`src/main/resources/db/migration/V40__create_audit_log.sql`. Crea `audit_log`, sus restricciones e
+índices, y una función de PostgreSQL con triggers que rechazan `UPDATE`, `DELETE` y `TRUNCATE`. La
+migración no crea relaciones directas con `bookings` ni aplica `ON DELETE CASCADE` sobre `app_user`.
 
 ### 4. Persistencia e inmutabilidad
 

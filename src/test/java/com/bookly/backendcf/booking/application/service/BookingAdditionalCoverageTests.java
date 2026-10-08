@@ -348,7 +348,7 @@ class BookingAdditionalCoverageTests {
                 .thenReturn(Collections.emptyList());
 
         Booking mockBooking = new Booking(custId, profId, svcId, start, end);
-        when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenReturn(mockBooking);
 
         service.createBooking(custId, profId, svcId, start, end);
 
@@ -367,11 +367,11 @@ class BookingAdditionalCoverageTests {
                 .thenReturn(Collections.emptyList());
 
         Booking mockBooking = new Booking(custId, profId, svcId, start, end);
-        when(bookingRepository.save(any(Booking.class))).thenReturn(mockBooking);
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenReturn(mockBooking);
 
         service.createBooking(custId, profId, svcId, start, end);
 
-        verify(bookingRepository, times(1)).save(any(Booking.class));
+        verify(bookingRepository, times(1)).saveAndFlush(any(Booking.class));
     }
 
     @Test

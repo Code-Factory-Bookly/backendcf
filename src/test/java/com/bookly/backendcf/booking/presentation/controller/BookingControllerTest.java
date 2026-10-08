@@ -131,12 +131,20 @@ class BookingControllerTest {
 
     @Test
     void shouldReturnConflictWhenSlotIsOccupied() {
+        String expectedError = "SLOT_OCUPADO";
+        String expectedMessage =
+                "El horario seleccionado ya no está disponible";
+
         when(createBookingService.createBooking(
-                any(), any(), any(), any(), any()
+                customerId,
+                professionalId,
+                serviceId,
+                startTime,
+                endTime
         )).thenThrow(
                 new BookingConflictException(
-                        "CONFLICT",
-                        "Slot occupied"
+                        expectedError,
+                        expectedMessage
                 )
         );
 
@@ -147,10 +155,19 @@ class BookingControllerTest {
                 HttpStatus.CONFLICT,
                 response.getStatusCode()
         );
+
         assertNotNull(response.getBody());
+
+        String responseBody = response.getBody().toString();
+
         assertTrue(
-                response.getBody().toString()
-                        .contains("CONFLICT")
+                responseBody.contains("error=" + expectedError),
+                "La respuesta debe incluir el código SLOT_OCUPADO"
+        );
+
+        assertTrue(
+                responseBody.contains("message=" + expectedMessage),
+                "La respuesta debe incluir el mensaje de horario no disponible"
         );
 
         verify(createBookingService, times(1))
@@ -161,6 +178,8 @@ class BookingControllerTest {
                         startTime,
                         endTime
                 );
+
+        verifyNoMoreInteractions(createBookingService);
     }
 
     @Test

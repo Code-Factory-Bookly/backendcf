@@ -60,6 +60,8 @@ public class SecurityConfiguration {
 
         // Asignación de roles: solo ADMIN (HU-17)
         .requestMatchers("/api/v1/usuarios/**").hasRole("ADMIN")
+        // Auditoría: solo ADMIN (HU-19)
+        .requestMatchers(HttpMethod.GET, "/api/v1/auditoria", "/api/v1/auditoria/**").hasRole("ADMIN")
         // Horario semanal: solo el profesional dueño (o ADMIN) lo consulta y modifica
         .requestMatchers("/api/v1/horarios/**").hasAnyRole("PROFESSIONAL", "ADMIN")
 

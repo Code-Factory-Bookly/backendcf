@@ -261,6 +261,39 @@ La evidencia reproducible de BD-03 se encuentra en
 los índices y el rechazo de `UPDATE`, `DELETE` y `TRUNCATE`; se ejecuta dentro de una transacción que
 termina en `ROLLBACK`.
 
+## Implementación de ARQ-04
+
+El caso de uso de registro se implementa en
+`audit/application/RegisterAuditActionService.java`, que satisface el puerto `AuditRecorder`, valida
+que cada acción use el tipo de recurso correspondiente y persiste con `saveAndFlush()` dentro de una
+transacción. Usa el puerto `audit/application/AuditLogStore.java`, por lo que la capa de aplicación no
+depende directamente de Spring Data JPA. La entidad `audit/domain/model/AuditLog.java` es inmutable
+desde el modelo de aplicación: no expone setters ni operaciones de actualización o eliminación.
+
+La persistencia se conecta mediante `audit/infrastructure/persistence/AuditLogRepositoryAdapter.java` y
+`AuditLogRepository.java`. La integración con eventos de reservas y con `RoleAssignmentService` queda
+para las tasks posteriores; este caso de uso puede ser invocado por esos módulos sin que `audit` dependa
+de sus clases concretas.
+
+## Implementación de ARQ-05
+
+La consulta administrativa se implementa mediante:
+
+- `audit/application/AuditQueryService.java`, que valida rango de fechas y paginación;
+- `audit/application/AuditLogQuery.java`, como puerto de lectura desacoplado de JPA;
+- `audit/infrastructure/persistence/AuditLogRepository.java`, que consulta por fecha con orden
+  determinista `occurredAt DESC, id DESC`;
+- `audit/presentation/AuditQueryController.java`, con `GET /api/v1/auditoria`;
+- `audit/presentation/dto/AuditLogResponse.java` y `AuditLogPageResponse.java`.
+
+El endpoint exige `from` y `to` en formato ISO-8601, permite páginas de 1 a 100 registros y está
+protegido en `SecurityConfiguration` exclusivamente para `ADMIN`. Los errores de rango o paginación
+usan el contrato uniforme `VALIDATION_ERROR`.
+
+Las pruebas de seguridad están en
+`src/test/java/com/bookly/backendcf/audit/presentation/AuditQueryControllerSecurityTest.java` y
+cubren `401`, `403` para `CUSTOMER` y `PROFESSIONAL`, y acceso exitoso para `ADMIN`.
+
 ## Implementación de BD-03
 
 La validación se concentra en una evidencia PostgreSQL reproducible, en lugar de crear una segunda

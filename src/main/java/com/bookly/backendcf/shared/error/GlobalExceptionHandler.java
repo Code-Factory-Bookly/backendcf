@@ -5,6 +5,7 @@ import com.bookly.backendcf.auth.application.InvalidCredentialsException;
 import com.bookly.backendcf.auth.application.InvalidMfaCodeException;
 import com.bookly.backendcf.auth.application.InvalidMfaTokenException;
 import com.bookly.backendcf.audit.application.InvalidAuditQueryException;
+import com.bookly.backendcf.availability.application.InvalidAvailabilityQueryException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -53,6 +54,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidAuditQueryException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidAuditQuery(InvalidAuditQueryException exception) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                exception.getMessage(),
+                exception.getDetails());
+    }
+
+    @ExceptionHandler(InvalidAvailabilityQueryException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidAvailabilityQuery(
+            InvalidAvailabilityQueryException exception) {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 "VALIDATION_ERROR",

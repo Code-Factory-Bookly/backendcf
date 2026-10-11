@@ -87,14 +87,47 @@ de negocio; esta tabla conserva el estado técnico del intento de entrega del co
 
 ### Restricciones
 
-- `id` es la clave primaria.
+- `id` es la clave primaria y se genera como UUID.
 - `booking_id` referencia `bookings(id)` y no utiliza `ON DELETE CASCADE`.
 - `event_id` es único para garantizar idempotencia y evitar duplicar un correo por evento.
-- `event_type` solo admite los tres tipos definidos por el contrato.
+- `event_type` solo admite `BOOKING_CREATED`, `BOOKING_RESCHEDULED` y `BOOKING_CANCELLED`.
 - `status` solo admite `PENDING`, `SENT` y `FAILED`.
-- `attempts >= 0`.
-- `sent_at` debe estar informado cuando `status = 'SENT'`.
+- `attempts` es obligatorio y debe cumplir `attempts >= 0`.
+- `sent_at` debe estar informado cuando `status = 'SENT'` y debe ser nulo en otro estado.
+- `error_message` debe estar informado cuando `status = 'FAILED'`.
 - Una notificación marcada como `SENT` no debe volver a procesarse.
+- El formato del correo se valida en la aplicación; la base conserva el límite de 320 caracteres
+  coherente con `app_user.email`.
+
+### Restricciones físicas propuestas
+
+La migración deberá materializar las reglas con nombres explícitos para facilitar el diagnóstico
+de errores y su traducción en la aplicación:
+
+```sql
+CONSTRAINT pk_notification_delivery PRIMARY KEY (id),
+CONSTRAINT uk_notification_delivery_event UNIQUE (event_id),
+CONSTRAINT fk_notification_delivery_booking
+    FOREIGN KEY (booking_id) REFERENCES bookings (id),
+CONSTRAINT ck_notification_delivery_event_type CHECK (
+    event_type IN ('BOOKING_CREATED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED')
+),
+CONSTRAINT ck_notification_delivery_status CHECK (
+    status IN ('PENDING', 'SENT', 'FAILED')
+),
+CONSTRAINT ck_notification_delivery_attempts CHECK (attempts >= 0),
+CONSTRAINT ck_notification_delivery_sent_at CHECK (
+    (status = 'SENT' AND sent_at IS NOT NULL)
+    OR (status <> 'SENT' AND sent_at IS NULL)
+),
+CONSTRAINT ck_notification_delivery_failed_error CHECK (
+    status <> 'FAILED' OR error_message IS NOT NULL
+)
+```
+
+La aplicación debe traducir una violación de `uk_notification_delivery_event` como un evento ya
+procesado, no como un error genérico del servidor. Las restricciones de dominio y de relación
+permanecen en PostgreSQL como autoridad final, de acuerdo con ADR-006.
 
 ### Índices
 

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Bookly Backend API
   version: 1.0.0
-  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-19, HU-20 y HU-22.
+  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-07,    HU-19, HU-20 y HU-22.
 servers:
   - url: http://localhost:8080/api/v1
 tags:
@@ -12,6 +12,7 @@ tags:
   - name: Professionals
   - name: Audit
   - name: Reservas
+  - name: Availability
 paths:
   /auth/register:
     post:
@@ -287,6 +288,49 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /disponibilidad:
+    get:
+      tags: [ Availability ]
+      summary: Consultar disponibilidad de agenda de un profesional
+      description: >-
+        Devuelve los bloques libres de un profesional para un servicio dentro de un rango de fechas (HU-07).
+        Cada bloque dura lo mismo que el servicio y se genera dentro de las franjas semanales del profesional.
+        Se excluyen los bloques que ya pasaron y los que se solapan con reservas CONFIRMADA.
+        Si no hay bloques libres responde 200 con available=false y un message que sugiere ampliar el filtro
+        de fechas o elegir otro profesional. El rango máximo es de 31 días. Requiere autenticación.
+        Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 404 PROFESSIONAL_NOT_FOUND o SERVICE_NOT_FOUND.
+      operationId: getAvailability
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: profesionalId
+          in: query
+          required: true
+          description: Identificador del profesional.
+          schema: { type: string, format: uuid }
+        - name: servicioId
+          in: query
+          required: true
+          description: Identificador del servicio; su duración define el tamaño de cada bloque.
+          schema: { type: string, format: uuid }
+        - name: desde
+          in: query
+          required: true
+          description: Primer día del rango (inclusivo), formato yyyy-MM-dd.
+          schema: { type: string, format: date, example: '2026-10-12' }
+        - name: hasta
+          in: query
+          required: true
+          description: Último día del rango (inclusivo), formato yyyy-MM-dd. Máximo 31 días desde `desde`.
+          schema: { type: string, format: date, example: '2026-10-18' }
+      responses:
+        '200':
+          description: Bloques libres del profesional, o mensaje informativo si no hay
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /reservas:
     post:
       tags: [Reservas]
@@ -590,32 +634,6 @@ components:
         occurredAt: { type: string, format: date-time }
         sourceIp: { type: string, nullable: true }
         metadata: { type: object, additionalProperties: { type: string } }
-    ProfessionalRequest:
-      type: object
-      required: [email, password, fullName, specialty]
-      properties:
-        email: { type: string, format: email, maxLength: 320 }
-        password: { type: string, format: password, minLength: 8, maxLength: 64 }
-        fullName: { type: string, maxLength: 150 }
-        specialty: { type: string, maxLength: 100 }
-    ProfessionalResponse:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        fullName: { type: string }
-        specialty: { type: string }
-        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
-        createdAt: { type: string, format: date-time }
-    ApiError:
-      type: object
-      required: [errorCode, message, details, traceId, timestamp]
-      properties:
-        errorCode: { type: string }
-        message: { type: string }
-        details: { type: object, additionalProperties: { type: string } }
-        traceId: { type: string, format: uuid }
-        timestamp: { type: string, format: date-time }
   responses:
     ValidationError: { description: Datos inválidos, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
     ConflictError: { description: Conflicto de integridad o estado, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }

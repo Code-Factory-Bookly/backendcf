@@ -2,6 +2,7 @@ package com.bookly.backendcf.availability.presentation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -67,13 +68,31 @@ class AvailabilityControllerSecurityTest {
     }
 
     @Test
-    void clienteAutenticadoConsultaLaDisponibilidad() throws Exception {
+    void clienteConsultaLaDisponibilidad() throws Exception {
         mockMvc.perform(get(url).header("Authorization", "Bearer " + tokenFor(UserRole.CUSTOMER)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.professionalId").value(professionalId.toString()))
                 .andExpect(jsonPath("$.available").value(false));
 
         verify(availabilityService).find(professionalId, serviceId, FROM, TO);
+    }
+
+    @Test
+    void profesionalRecibeForbiddenAlConsultarLaDisponibilidad() throws Exception {
+        mockMvc.perform(get(url).header("Authorization", "Bearer " + tokenFor(UserRole.PROFESSIONAL)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        verify(availabilityService, never()).find(any(), any(), any(), any());
+    }
+
+    @Test
+    void administradorRecibeForbiddenAlConsultarLaDisponibilidad() throws Exception {
+        mockMvc.perform(get(url).header("Authorization", "Bearer " + tokenFor(UserRole.ADMIN)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        verify(availabilityService, never()).find(any(), any(), any(), any());
     }
 
     @Test

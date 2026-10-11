@@ -17,6 +17,9 @@ public interface AvailabilityQuery {
 
     List<WorkingWindow> findWorkingWindows(UUID professionalId);
 
-    /** Reservas confirmadas del profesional que se solapan con el rango [from, to). */
+    /**
+     * Periodos ocupados del profesional en el rango [from, to). Hoy solo incluye reservas confirmadas; los
+     * bloqueos manuales de agenda no existen aún (ver docs/HU-07-disponibilidad.md).
+     */
     List<BusyPeriod> findBusyPeriods(UUID professionalId, LocalDateTime from, LocalDateTime to);
 }

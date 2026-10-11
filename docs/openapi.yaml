@@ -297,7 +297,7 @@ paths:
         Cada bloque dura lo mismo que el servicio y se genera dentro de las franjas semanales del profesional.
         Se excluyen los bloques que ya pasaron y los que se solapan con reservas CONFIRMADA.
         Si no hay bloques libres responde 200 con available=false y un message que sugiere ampliar el filtro
-        de fechas o elegir otro profesional. El rango máximo es de 31 días. Requiere autenticación.
+        de fechas o elegir otro profesional. El rango máximo es de 31 días. Solo el rol CUSTOMER.
         Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 404 PROFESSIONAL_NOT_FOUND o SERVICE_NOT_FOUND.
       operationId: getAvailability
       security: [ { bearerAuth: [ ] } ]
@@ -330,6 +330,7 @@ paths:
               schema: { $ref: '#/components/schemas/AvailabilityResponse' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /reservas:
     post:
@@ -613,6 +614,34 @@ components:
         slots:
           type: array
           items: { $ref: '#/components/schemas/ScheduleSlot' }
+    AvailabilityBlock:
+      type: object
+      properties:
+        startTime: { type: string, format: date-time, example: '2026-10-12T09:00:00' }
+        endTime: { type: string, format: date-time, example: '2026-10-12T10:00:00' }
+    AvailabilityDay:
+      type: object
+      properties:
+        date: { type: string, format: date, example: '2026-10-12' }
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilityBlock' }
+    AvailabilityResponse:
+      type: object
+      properties:
+        professionalId: { type: string, format: uuid }
+        serviceId: { type: string, format: uuid }
+        durationMinutes: { type: integer, minimum: 1 }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        available: { type: boolean }
+        message:
+          type: string
+          nullable: true
+          description: Solo viene cuando no hay bloques libres; sugiere ampliar el filtro de fechas o elegir otro profesional.
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilityDay' }
     AuditLogPageResponse:
       type: object
       properties:

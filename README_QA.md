@@ -98,6 +98,15 @@ Implementada y mergeada en el PR #15. La cobertura incluye registro exitoso, cor
 
 HU-20 tiene sus 4 escenarios Gherkin cubiertos entre `PlatformSetupServiceTest` (capa de servicio, Mockito), `PlatformSetupRequestValidationTest` (contrato del DTO, Bean Validation) y `PlatformSetupControllerTest` (contrato HTTP vía `@WebMvcTest`, códigos 201/409/400). Adicionalmente, `PlatformSetupServiceTest.segundoAprovisionamientoConcurrenteEsRechazadoPorElIndiceUnicoDePlataforma` cubre la condición de carrera del índice único `uk_platform_singleton` señalada en la sección 6, y `PlatformSetupRequestValidationTest` suma dos casos de control (`name` en blanco y request válido) que no están descritos literalmente en el Gherkin.
 
+### HU-07 — Consulta de disponibilidad de agenda
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Ver franjas libres de un profesional | `AvailabilityServiceTest.devuelveLosBloquesLibresSegunLaDuracionDelServicio/noMuestraLosBloquesYaOcupados`, `AvailabilityCalculatorTest.generaBloquesConsecutivosDentroDeLaFranja/excluyeLosBloquesQueSeSolapanConUnaReserva/unaReservaContiguaNoBloqueaElBloqueSiguiente/ignoraLosBloquesQueYaPasaron`, `AvailabilityIntegrationTest.consultaLasFranjasRealesYExcluyeLasReservasConfirmadas/unaReservaCanceladaNoOcupaElBloque` (PostgreSQL real), `AvailabilityControllerSecurityTest.clienteConsultaLaDisponibilidad` | Cubierto. Los bloqueos manuales quedan fuera de alcance (ver `docs/HU-07-disponibilidad.md`) |
+| Consultar disponibilidad en un profesional sin cupos libres | `AvailabilityServiceTest.sinFranjasLibresInformaYSugiereAmpliarElFiltro`, `AvailabilityIntegrationTest.sinHorariosEnElRangoInformaQueNoHayDisponibilidad/profesionalTotalmenteReservadoInformaQueNoHayDisponibilidad` | Cubierto |
+| Control adicional: validación del rango y 404 | `AvailabilityServiceTest.rechazaParametrosFaltantes/rechazaUnRangoInvertido/rechazaUnRangoMayorAlMaximo/rechazaUnRangoCompletamenteEnElPasado/profesionalInexistenteDevuelveNotFound/servicioInexistenteOInactivoDevuelveNotFound`, `GlobalExceptionHandlerTest.transformaUnaConsultaDeDisponibilidadInvalidaEnErrorBadRequest` | Cubierto |
+| Control adicional: autorización (solo `CUSTOMER`) | `AvailabilityControllerSecurityTest.sinTokenDevuelveUnauthorized/profesionalRecibeForbiddenAlConsultarLaDisponibilidad/administradorRecibeForbiddenAlConsultarLaDisponibilidad` | Cubierto |
+
 ## 5. Estado real de la suite de pruebas
 
 ```text
@@ -106,6 +115,11 @@ src/test/java/com/bookly/backendcf/
 ├── auth/application/RegisterCustomerServiceTest.java               # 3,  HU-01 (Mockito)
 ├── auth/domain/model/UserAccountTest.java                          # 6,  reglas de dominio
 ├── auth/security/JwtTokenServiceTest.java                          # 10, riesgo JWT (firma/expiración/estructura)
+├── availability/application/AvailabilityServiceTest.java           # 10, HU-07 (servicio, Mockito)
+├── availability/application/AvailabilityIntegrationTest.java       # 4,  HU-07 (PostgreSQL real)
+├── availability/domain/model/AvailabilityCalculatorTest.java       # 8,  HU-07 (regla de dominio)
+├── availability/infrastructure/persistence/AvailabilityQueryAdapterTest.java # 5, HU-07 (adaptador, Mockito)
+├── availability/presentation/AvailabilityControllerSecurityTest.java # 5, HU-07 (contrato HTTP/seguridad)
 ├── catalog/application/ServiceOfferingServiceTest.java             # 5,  HU-02 (servicio, Mockito)
 ├── catalog/domain/model/ServiceOfferingTest.java                   # 10, HU-06 (dominio/duración)
 ├── catalog/presentation/ServiceOfferingControllerTest.java         # 5,  HU-02 (contrato HTTP, @WebMvcTest)
@@ -125,6 +139,8 @@ Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `Globa
 
 `LoginServiceTest` simula el repositorio con un `Proxy` de reflexión hecho a mano en vez de Mockito. El resto de los tests nuevos (`RegisterCustomerServiceTest`, `OwnershipGuardTest`, `RegisterProfessionalServiceTest` del PR #15, y `JwtTokenServiceTest` del PR #18) sí usan Mockito o son de unidad plana sin mocks — conviene migrar `LoginServiceTest` al mismo patrón cuando se retome.
 
+**HU-07:** 34 pruebas automatizadas, todas en verde (`./mvnw test`, verificado el 2026-10-10). Incluye 4 pruebas de integración contra PostgreSQL real (`AvailabilityIntegrationTest`, requieren la base `bookly_test` en el puerto 55432, igual que `BookingConcurrencyTest`).
+
 ## 6. Defectos y riesgos de calidad detectados
 
 | Riesgo | Ubicación | Impacto |
@@ -142,7 +158,7 @@ Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `Globa
 ```mermaid
 flowchart LR
     V[Validación<br/>lint + compilación]
-    Q[Calidad<br/>SonarCloud + cobertura ≥65%]
+    Q[Calidad<br/>SonarCloud + cobertura ≥ 65%]
     S[Seguridad<br/>SAST/SCA/secretos]
     D[Despliegue<br/>health check]
     V --> Q --> S --> D
@@ -211,6 +227,12 @@ Análisis local contra SonarCloud (una vez resuelto el bloqueo de la sección 7.
 ```bash
 export SONAR_TOKEN=$(cat ~/.sonar_token)
 ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+```
+Las pruebas de integración (`BookingConcurrencyTest`, `AvailabilityIntegrationTest`) requieren un PostgreSQL local:
+
+```bash
+docker run -d --name bookly-test-db -e POSTGRES_DB=bookly_test -e POSTGRES_USER=bookly_test \
+  -e POSTGRES_PASSWORD=bookly_test_local_2026 -p 55432:5432 postgres:16-alpine
 ```
 
 ## 10. Pendientes de evolución

@@ -24,7 +24,7 @@ public final class AvailabilityCalculator {
         }
 
         List<WorkingWindow> dayWindows = windows.stream()
-                .filter(window -> window.dayOfWeek() == date.getDayOfWeek())
+                .filter(window -> date.getDayOfWeek().equals(window.dayOfWeek()))
                 .sorted(Comparator.comparing(WorkingWindow::startTime))
                 .toList();
 
@@ -37,7 +37,7 @@ public final class AvailabilityCalculator {
                 if (cursor.isAfter(now) && isFree(cursor, blockEnd, busyPeriods)) {
                     free.add(new AvailableSlot(cursor, blockEnd));
                 }
-                cursor = blockEnd;
+                    cursor = blockEnd;
             }
         }
         return free;

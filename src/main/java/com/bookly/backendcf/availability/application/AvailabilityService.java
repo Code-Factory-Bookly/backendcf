@@ -78,7 +78,7 @@ public class AvailabilityService {
         if (to == null) {
             details.put("hasta", "Es obligatorio");
         }
-        if (!details.isEmpty()) {
+        if (from == null || to == null || !details.isEmpty()) {
             throw new InvalidAvailabilityQueryException("Faltan parámetros de la consulta", details);
         }
 

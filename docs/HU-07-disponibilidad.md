@@ -63,16 +63,24 @@ y sugiere ampliar el filtro de fechas o elegir otro profesional.
 2. Dentro de cada franja se generan bloques consecutivos con la duración del servicio (HU-06), empezando en la hora inicial de la franja. Un bloque que no cabe completo al final de la franja se descarta.
 3. Se excluyen los bloques que ya pasaron y los que se solapan con reservas `CONFIRMADA` del profesional (HU-08). Una reserva contigua no bloquea el bloque siguiente.
 
-## Alcance y límites
+## Dependencias y limitaciones
 
-- No existe todavía un mecanismo de bloqueos manuales de agenda; hoy solo las reservas confirmadas ocupan bloques.
-- La consulta es informativa. Dos clientes pueden ver el mismo bloque libre a la vez; la reserva simultánea
-  la resuelve `POST /api/v1/reservas` (ADR-006).
+- **Bloqueos manuales de agenda (vacaciones, ausencias, descansos):** el modelo actual no los contempla;
+  no existe tabla, endpoint ni HU que los registre. El criterio "no mostrar bloques bloqueados" de HU-07
+  se cumple hoy únicamente respecto de las reservas `CONFIRMADA`. Es una limitación conocida y está fuera
+  del alcance de esta HU; depende de una HU futura de bloqueos de agenda.
+- **Cómo se integrará:** `AvailabilityCalculator` trata cualquier `BusyPeriod` como tiempo ocupado.
+  Cuando exista la HU de bloqueos bastará con que `AvailabilityQuery.findBusyPeriods` y su adaptador
+  incluyan también los periodos bloqueados; el cálculo no cambia.
+- **Estados de reserva:** solo `CONFIRMADA` ocupa un bloque. Una reserva `CANCELADA`, `RESCHEDULED` o
+  `COMPLETED` no lo ocupa (`BookingRepository.findOverlappingBookings`).
+- La consulta es informativa. Dos clientes pueden ver el mismo bloque libre a la vez; la reserva
+  simultánea la resuelve `POST /api/v1/reservas` (ADR-006).
 - No requiere migraciones: usa las tablas `horario_semanal`, `servicios` y `bookings`.
 
 ## Autorización
 
-Cualquier usuario autenticado puede consultar (`.anyRequest().authenticated()` en `SecurityConfiguration`).
+Solo el rol `CUSTOMER` puede consultar la disponibilidad: la HU describe la consulta como una acción del cliente y el flujo continúa con `POST /api/v1/reservas`. `SecurityConfiguration` aplica `hasRole("CUSTOMER")` sobre `GET /api/v1/disponibilidad`; PROFESSIONAL y ADMIN reciben 403 `ACCESS_DENIED` y sin token se recibe 401. Cubierto por `AvailabilityControllerSecurityTest`.
 
 ## Arquitectura
 

@@ -130,7 +130,7 @@ El módulo `availability` no tiene tablas propias: calcula los bloques libres a 
 
 | Componente | Responsabilidad |
 |---|---|
-| `AvailabilityController` | `GET /api/v1/disponibilidad` con `profesionalId`, `servicioId`, `desde` y `hasta`; requiere autenticación |
+| `AvailabilityController` | `GET /api/v1/disponibilidad` con `profesionalId`, `servicioId`, `desde` y `hasta`; solo rol CUSTOMER |
 | `AvailabilityService` | Valida el rango (máximo 31 días, no pasado), verifica profesional y servicio activo y arma la respuesta; informa cuando no hay cupos |
 | `AvailabilityQuery` | Puerto que declara los datos necesarios: existencia del profesional, duración del servicio, franjas semanales y reservas ocupadas |
 | `AvailabilityQueryAdapter` | Implementa el puerto con `ProfessionalRepository`, `ServiceOfferingRepository`, `WeeklySlotRepository` y `BookingRepository` |

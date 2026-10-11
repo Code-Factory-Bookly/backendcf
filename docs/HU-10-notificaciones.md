@@ -132,3 +132,4 @@ migraciones `V40`, `V41` y `V42`.
 - Dependencias: HU-08 y HU-09.
 - Consumidores: módulo `notification`.
 - Eventos relacionados: `BookingCreated`, `BookingRescheduled`, `BookingCancelled`.
+- Decisión arquitectónica: [ADR-011: Notificaciones de reserva mediante eventos](ADR-011-notificaciones-por-eventos.md).

@@ -2,7 +2,8 @@
 
 ## Estado
 
-Propuesta inicial para validación con el responsable de `booking` (HU-08/HU-09).
+Contrato actualizado con base en los cambios integrados de HU-09 en `main`. `eventId` ya está
+incorporado en los eventos actuales; queda pendiente confirmar el alcance de la reprogramación.
 
 ## Propósito
 
@@ -16,12 +17,22 @@ El módulo `booking` publicará los siguientes eventos:
 
 | Evento | Momento de publicación | Notificación esperada |
 |---|---|---|
-| `BookingCreated` | Después de crear y confirmar una reserva | Confirmación de reserva |
-| `BookingRescheduled` | Después de confirmar una reprogramación | Nueva fecha y hora de la reserva |
-| `BookingCancelled` | Después de confirmar una cancelación | Cancelación y liberación del cupo |
+| `BookingCreatedEvent` | Después de crear y confirmar una reserva | Confirmación de reserva |
+| `BookingCancelledEvent` | Después de confirmar una cancelación | Cancelación y liberación del cupo |
+| `BookingRescheduledEvent` | No disponible actualmente en `main` | Pendiente de confirmar |
 
-Los eventos deben procesarse después del commit de la transacción que modifica la reserva.
-Un fallo del correo no debe revertir la creación, reprogramación o cancelación de la reserva.
+Los eventos deben consumirse después del commit de la transacción que modifica la reserva. En la
+implementación actual, `BookingCancelledEvent` se publica dentro de la transacción para que HU-19
+pueda registrar la auditoría transaccional; el consumidor de notificaciones debe reaccionar con un
+listener `AFTER_COMMIT`. Un fallo del correo no debe revertir la operación de reserva.
+
+### Contrato actualmente disponible
+
+`BookingCreatedEvent` y `BookingCancelledEvent` ya exponen un `eventId` UUID generado al crear el
+evento. `BookingCancelledEvent` también expone `bookingId`, `customerId`, `professionalId`,
+`serviceId`, `startTime`, `endTime`, `cancelledAt`, `cancellationReason` y `occurredAt`. El contrato
+actual no expone datos descriptivos como el correo del cliente, el nombre del servicio o el nombre
+del profesional.
 
 ## Envolvente común
 
@@ -39,7 +50,8 @@ Cada evento debe exponer, como mínimo:
 
 ## Datos de la reserva
 
-Los eventos de creación y reprogramación deben incluir `startTime` y `endTime`.
+Los eventos de creación y reprogramación deben incluir `startTime` y `endTime`. El evento de
+cancelación integrado en `main` ya incluye esos campos.
 El evento de cancelación debe incluir también `cancelledAt` y, si existe, `cancellationReason`.
 
 Para construir el correo, el consumidor necesita además el correo y nombre del cliente,
@@ -213,9 +225,10 @@ porque esas operaciones no forman parte del alcance funcional actual de HU-10.
 
 ## Decisiones pendientes con Miguel
 
-- Confirmar los nombres definitivos de `BookingRescheduled` y `BookingCancelled`.
-- Confirmar si los eventos se publicarán como eventos de Spring después del commit o mediante una
-  tabla outbox.
+- Confirmar si `BookingRescheduledEvent` entra en el alcance de HU-10 o queda para una evolución
+  posterior.
+- Confirmar que el listener de notificaciones se ejecutará después del commit; la publicación actual
+  ocurre dentro de la transacción por la necesidad de auditoría de HU-19.
 - Confirmar la forma de transportar los datos descriptivos del correo.
 - Confirmar el contenido final y los datos obligatorios de cada plantilla.
 
@@ -224,5 +237,6 @@ porque esas operaciones no forman parte del alcance funcional actual de HU-10.
 - HU relacionada: HU-10.
 - Dependencias: HU-08 y HU-09.
 - Consumidores: módulo `notification`.
-- Eventos relacionados: `BookingCreated`, `BookingRescheduled`, `BookingCancelled`.
+- Eventos relacionados: `BookingCreatedEvent`, `BookingCancelledEvent` y, como pendiente,
+  `BookingRescheduledEvent`.
 - Decisión arquitectónica: [ADR-011: Notificaciones de reserva mediante eventos](ADR-011-notificaciones-por-eventos.md).

@@ -185,6 +185,7 @@ class BookingDtoTests {
         assertEquals(svcId, event.getServiceId());
         assertEquals(start, event.getStartTime());
         assertEquals(end, event.getEndTime());
+        assertNotNull(event.getEventId());
         assertNotNull(event.getOccurredAt());
     }
 

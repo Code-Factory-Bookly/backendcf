@@ -138,6 +138,51 @@ permanecen en PostgreSQL como autoridad final, de acuerdo con ADR-006.
 | `(booking_id, created_at DESC)` | Consultar el historial de una reserva |
 | `(event_type, created_at DESC)` | Consultar envíos por tipo de evento |
 
+### Definición física y consultas objetivo
+
+La migración deberá crear los índices con nombres explícitos:
+
+```sql
+CREATE INDEX ix_notification_delivery_status_attempt
+    ON notification_delivery (status, last_attempt_at);
+
+CREATE INDEX ix_notification_delivery_booking_created
+    ON notification_delivery (booking_id, created_at DESC);
+
+CREATE INDEX ix_notification_delivery_type_created
+    ON notification_delivery (event_type, created_at DESC);
+```
+
+La restricción única `uk_notification_delivery_event` crea el índice único que soporta la
+idempotencia; no se agregará otro índice redundante sobre `event_id`.
+
+Consultas principales que justifican los índices:
+
+```sql
+-- Lote de notificaciones pendientes o fallidas para reintento
+SELECT id, event_id, booking_id, recipient_email, attempts
+FROM notification_delivery
+WHERE status IN ('PENDING', 'FAILED')
+ORDER BY last_attempt_at NULLS FIRST
+LIMIT 100;
+
+-- Historial de entregas de una reserva
+SELECT event_type, status, attempts, created_at, sent_at, error_message
+FROM notification_delivery
+WHERE booking_id = :booking_id
+ORDER BY created_at DESC;
+
+-- Seguimiento de entregas por tipo de evento
+SELECT event_type, status, created_at, sent_at
+FROM notification_delivery
+WHERE event_type = :event_type
+ORDER BY created_at DESC;
+```
+
+El índice de reintentos se justifica por la consulta operativa de procesamiento; el índice por
+reserva permite trazabilidad determinista; y el índice por tipo facilita métricas y diagnóstico.
+La paginación por `LIMIT` evita procesar un volumen ilimitado en una sola operación.
+
 ### Flujo de estados
 
 ```text
@@ -147,9 +192,9 @@ PENDING ── error permanente ──> FAILED
 FAILED  ── reintento autorizado ──> PENDING
 ```
 
-La tabla debe crearse mediante una migración Flyway dentro del rango asignado a HU-10. El número
-definitivo de la migración queda pendiente de confirmar porque el repositorio ya contiene las
-migraciones `V40`, `V41` y `V42`.
+La tabla se creará mediante la migración `V43__create_notification_delivery.sql`, dentro del rango
+asignado a HU-10. Se eligió `V43` porque el repositorio ya contiene las migraciones `V40`, `V41` y
+`V42`.
 
 ## Impacto en la API REST
 

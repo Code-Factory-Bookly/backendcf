@@ -463,9 +463,11 @@ queda pendiente de que exista `BookingRescheduledEvent` en el contrato de `booki
 
 ### Modelo físico y restricciones
 
-La tabla se implementa mediante `V43__create_notification_delivery.sql`. PostgreSQL garantiza:
+La tabla se implementa mediante `V43__create_notification_delivery.sql`; la FK se ajusta en
+`V44__cascade_notification_delivery_booking.sql` para que la limpieza de una reserva no quede
+bloqueada por su registro técnico de entrega. PostgreSQL garantiza:
 
-- FK de `booking_id` hacia `bookings(id)` sin `ON DELETE CASCADE`;
+- FK de `booking_id` hacia `bookings(id)` con `ON DELETE CASCADE`, limitada a los registros técnicos de entrega;
 - unicidad de `event_id` para impedir correos duplicados;
 - dominios válidos para `event_type` y `status`;
 - `attempts >= 0`;

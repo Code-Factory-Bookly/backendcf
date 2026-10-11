@@ -294,12 +294,20 @@ Compilación verificada:
 
 La migración `V43__create_notification_delivery.sql` también fue aplicada contra PostgreSQL 16.15
 en Docker. Se verificaron la tabla, la FK hacia `bookings`, la unicidad de `event_id`, las
-restricciones `CHECK` y los índices operativos.
+restricciones `CHECK` y los índices operativos. La migración `V44__cascade_notification_delivery_booking.sql`
+ajusta la FK para que la limpieza de una reserva no quede bloqueada por su registro técnico.
+
+Suite completa ejecutada con una base PostgreSQL de pruebas en `localhost:55432`:
+
+```bash
+./mvnw test
+```
+
+Resultado: **264 pruebas ejecutadas, 0 fallos y 0 errores**.
 
 ### Pendientes de QA para cerrar HU-10
 
-1. Ejecutar la suite completa con `./mvnw test` después de integrar el módulo.
-2. Agregar prueba de integración del listener `AFTER_COMMIT` contra PostgreSQL.
-3. Validar el contenido final de las plantillas con datos representativos.
-4. Definir y probar el adaptador SMTP o proveedor externo cuando se habilite.
-5. Agregar casos de reprogramación cuando exista `BookingRescheduledEvent`.
+1. Agregar prueba de integración específica del listener `AFTER_COMMIT` contra PostgreSQL.
+2. Validar el contenido final de las plantillas con datos representativos.
+3. Definir y probar el adaptador SMTP o proveedor externo cuando se habilite.
+4. Agregar casos de reprogramación cuando exista `BookingRescheduledEvent`.

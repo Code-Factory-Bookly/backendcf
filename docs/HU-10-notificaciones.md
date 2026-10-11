@@ -118,6 +118,21 @@ La tabla debe crearse mediante una migración Flyway dentro del rango asignado a
 definitivo de la migración queda pendiente de confirmar porque el repositorio ya contiene las
 migraciones `V40`, `V41` y `V42`.
 
+## Impacto en la API REST
+
+HU-10 no agrega un endpoint público nuevo. La creación, reprogramación y cancelación continúan
+siendo operaciones del recurso `/api/v1/reservas`; el módulo `notification` reacciona internamente
+a los eventos producidos por esas operaciones.
+
+Por lo tanto, `docs/openapi.yaml` se actualiza para:
+
+- incluir HU-10 dentro del alcance documentado;
+- indicar explícitamente que no existe una ruta REST propia de notificaciones;
+- enlazar este documento como referencia del contrato interno de eventos.
+
+No se exponen endpoints para forzar envíos, consultar reintentos o modificar estados técnicos,
+porque esas operaciones no forman parte del alcance funcional actual de HU-10.
+
 ## Decisiones pendientes con Miguel
 
 - Confirmar los nombres definitivos de `BookingRescheduled` y `BookingCancelled`.

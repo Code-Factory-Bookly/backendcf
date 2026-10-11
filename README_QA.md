@@ -307,8 +307,8 @@ Suite completa ejecutada con una base PostgreSQL de pruebas en `localhost:55432`
 
 Resultado de la suite base: **264 pruebas ejecutadas, 0 fallos y 0 errores**.
 
-Con la prueba de integración `AFTER_COMMIT` de HU-10 incorporada, la suite completa actual queda
-en **266 pruebas ejecutadas, 0 fallos y 0 errores**.
+Con las pruebas de integración `AFTER_COMMIT`, SMTP y contrato de reprogramación incorporadas, la
+suite completa actual queda en **268 pruebas ejecutadas, 0 fallos y 0 errores**.
 
 ### Pendientes de QA para cerrar HU-10
 

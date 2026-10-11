@@ -3,7 +3,8 @@
 ## Estado
 
 Contrato actualizado con base en los cambios integrados de HU-09 en `main`. `eventId` ya está
-incorporado en los eventos actuales; queda pendiente confirmar el alcance de la reprogramación.
+incorporado en los eventos actuales y `BookingRescheduledEvent` queda definido como contrato
+preparado para que `booking` lo publique cuando Miguel integre la reprogramación.
 
 ## Propósito
 
@@ -19,7 +20,7 @@ El módulo `booking` publicará los siguientes eventos:
 |---|---|---|
 | `BookingCreatedEvent` | Después de crear y confirmar una reserva | Confirmación de reserva |
 | `BookingCancelledEvent` | Después de confirmar una cancelación | Cancelación y liberación del cupo |
-| `BookingRescheduledEvent` | No disponible actualmente en `main` | Pendiente de confirmar |
+| `BookingRescheduledEvent` | Contrato definido; publicación pendiente en `booking` | Reprogramación |
 
 Los eventos deben consumirse después del commit de la transacción que modifica la reserva. En la
 implementación actual, `BookingCancelledEvent` se publica dentro de la transacción para que HU-19
@@ -28,8 +29,8 @@ listener `AFTER_COMMIT`. Un fallo del correo no debe revertir la operación de r
 
 ### Contrato actualmente disponible
 
-`BookingCreatedEvent` y `BookingCancelledEvent` ya exponen un `eventId` UUID generado al crear el
-evento. `BookingCancelledEvent` también expone `bookingId`, `customerId`, `professionalId`,
+`BookingCreatedEvent`, `BookingCancelledEvent` y `BookingRescheduledEvent` exponen un `eventId`
+UUID generado al crear el evento. `BookingCancelledEvent` también expone `bookingId`, `customerId`, `professionalId`,
 `serviceId`, `startTime`, `endTime`, `cancelledAt`, `cancellationReason` y `occurredAt`. El contrato
 actual no expone datos descriptivos como el correo del cliente, el nombre del servicio o el nombre
 del profesional.
@@ -100,7 +101,8 @@ de negocio; esta tabla conserva el estado técnico del intento de entrega del co
 ### Restricciones
 
 - `id` es la clave primaria y se genera como UUID.
-- `booking_id` referencia `bookings(id)` y no utiliza `ON DELETE CASCADE`.
+- `booking_id` referencia `bookings(id)`; V44 usa `ON DELETE CASCADE` únicamente para limpiar
+  registros técnicos cuando una reserva se elimina en fixtures o tareas administrativas.
 - `event_id` es único para garantizar idempotencia y evitar duplicar un correo por evento.
 - `event_type` solo admite `BOOKING_CREATED`, `BOOKING_RESCHEDULED` y `BOOKING_CANCELLED`.
 - `status` solo admite `PENDING`, `SENT` y `FAILED`.
@@ -120,7 +122,7 @@ de errores y su traducción en la aplicación:
 CONSTRAINT pk_notification_delivery PRIMARY KEY (id),
 CONSTRAINT uk_notification_delivery_event UNIQUE (event_id),
 CONSTRAINT fk_notification_delivery_booking
-    FOREIGN KEY (booking_id) REFERENCES bookings (id),
+    FOREIGN KEY (booking_id) REFERENCES bookings (id) ON DELETE CASCADE,
 CONSTRAINT ck_notification_delivery_event_type CHECK (
     event_type IN ('BOOKING_CREATED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED')
 ),
@@ -204,9 +206,8 @@ PENDING ── error permanente ──> FAILED
 FAILED  ── reintento autorizado ──> PENDING
 ```
 
-La tabla se creará mediante la migración `V43__create_notification_delivery.sql`, dentro del rango
-asignado a HU-10. Se eligió `V43` porque el repositorio ya contiene las migraciones `V40`, `V41` y
-`V42`.
+La tabla se crea mediante `V43__create_notification_delivery.sql` y la política de eliminación se
+ajusta mediante `V44__cascade_notification_delivery_booking.sql`.
 
 ## Impacto en la API REST
 
@@ -223,10 +224,28 @@ Por lo tanto, `docs/openapi.yaml` se actualiza para:
 No se exponen endpoints para forzar envíos, consultar reintentos o modificar estados técnicos,
 porque esas operaciones no forman parte del alcance funcional actual de HU-10.
 
+## Proveedor SMTP y plantillas
+
+El puerto `EmailNotificationPort` se implementa con dos adaptadores seleccionables mediante
+`NOTIFICATION_EMAIL_PROVIDER`:
+
+- `logging` (valor por defecto): útil para desarrollo y pruebas, no contacta un servidor externo.
+- `smtp`: usa `JavaMailSender` y las propiedades externas `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_AUTH` y `SMTP_STARTTLS_ENABLE`.
+
+Las credenciales no se almacenan en el repositorio. Las plantillas de texto se encuentran en
+`src/main/resources/templates/email/` y usan estas variables:
+
+| Plantilla | Variables |
+|---|---|
+| Confirmación | `customerName`, `serviceName`, `professionalName`, `dateTime` |
+| Cancelación | `customerName`, `serviceName`, `professionalName`, `dateTime`, `cancellationReason` |
+| Reprogramación | `customerName`, `serviceName`, `professionalName`, `previousDateTime`, `dateTime` |
+
 ## Decisiones pendientes con Miguel
 
-- Confirmar si `BookingRescheduledEvent` entra en el alcance de HU-10 o queda para una evolución
-  posterior.
+- Publicar `BookingRescheduledEvent` desde `booking` cuando Miguel integre la lógica de
+  reprogramación.
 - Confirmar que el listener de notificaciones se ejecutará después del commit; la publicación actual
   ocurre dentro de la transacción por la necesidad de auditoría de HU-19.
 - Confirmar la forma de transportar los datos descriptivos del correo.
@@ -237,6 +256,6 @@ porque esas operaciones no forman parte del alcance funcional actual de HU-10.
 - HU relacionada: HU-10.
 - Dependencias: HU-08 y HU-09.
 - Consumidores: módulo `notification`.
-- Eventos relacionados: `BookingCreatedEvent`, `BookingCancelledEvent` y, como pendiente,
+- Eventos relacionados: `BookingCreatedEvent`, `BookingCancelledEvent` y el contrato preparado
   `BookingRescheduledEvent`.
 - Decisión arquitectónica: [ADR-011: Notificaciones de reserva mediante eventos](ADR-011-notificaciones-por-eventos.md).

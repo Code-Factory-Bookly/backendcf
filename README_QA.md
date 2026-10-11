@@ -254,9 +254,9 @@ La implementación actual de HU-10 consume los eventos disponibles en `main`:
 - `BookingRescheduledEvent` queda fuera de esta ejecución porque todavía no existe en el contrato
   de `booking`.
 
-El adaptador actual es `LoggingEmailNotificationAdapter`, por lo que las pruebas no dependen de un
-servidor SMTP externo. El puerto `EmailNotificationPort` permite sustituirlo posteriormente por un
-proveedor real.
+El adaptador `LoggingEmailNotificationAdapter` se mantiene como valor predeterminado para que las
+pruebas no dependan de un servidor externo. `SmtpEmailNotificationAdapter` permite activar un
+proveedor real mediante variables de entorno, sin credenciales en el repositorio.
 
 ### Trazabilidad Gherkin → pruebas
 
@@ -267,6 +267,8 @@ proveedor real.
 | El mismo evento no genera un segundo correo | `NotificationServiceTest.eventoYaProcesadoNoVuelveAEnviarCorreo` | Cubierto |
 | El evento de cancelación contiene los datos de la reserva | `CancelBookingServiceTest` — captura de `BookingCancelledEvent` | Cubierto |
 | El evento tiene identificador único para idempotencia | `BookingDtoTests.bookingCreatedEventConstructor`, `CancelBookingServiceTest` | Cubierto |
+| El listener procesa después del commit | `BookingNotificationListenerIntegrationTest.procesaElEventoSoloDespuesDelCommit` | Cubierto |
+| El listener no procesa un rollback | `BookingNotificationListenerIntegrationTest.noProcesaElEventoCuandoLaTransaccionHaceRollback` | Cubierto |
 
 ### Criterios negativos y de seguridad
 
@@ -303,11 +305,13 @@ Suite completa ejecutada con una base PostgreSQL de pruebas en `localhost:55432`
 ./mvnw test
 ```
 
-Resultado: **264 pruebas ejecutadas, 0 fallos y 0 errores**.
+Resultado de la suite base: **264 pruebas ejecutadas, 0 fallos y 0 errores**.
+
+Con la prueba de integración `AFTER_COMMIT` de HU-10 incorporada, la suite completa actual queda
+en **266 pruebas ejecutadas, 0 fallos y 0 errores**.
 
 ### Pendientes de QA para cerrar HU-10
 
-1. Agregar prueba de integración específica del listener `AFTER_COMMIT` contra PostgreSQL.
-2. Validar el contenido final de las plantillas con datos representativos.
-3. Definir y probar el adaptador SMTP o proveedor externo cuando se habilite.
-4. Agregar casos de reprogramación cuando exista `BookingRescheduledEvent`.
+1. Validar el contenido final de las plantillas con datos representativos del negocio.
+2. Configurar y probar las credenciales SMTP del entorno de despliegue, sin incorporarlas al código.
+3. Agregar casos de reprogramación cuando `booking` publique `BookingRescheduledEvent`.

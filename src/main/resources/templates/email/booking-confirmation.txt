@@ -1,0 +1,9 @@
+Hola {{customerName}},
+
+Tu reserva fue confirmada.
+
+Servicio: {{serviceName}}
+Profesional: {{professionalName}}
+Fecha y hora: {{dateTime}}
+
+Gracias por usar Bookly.

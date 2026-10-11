@@ -2,7 +2,8 @@
 
 ## Estado
 
-Propuesta pendiente de validación con el responsable del módulo `booking`.
+Implementada en HU-10; pendiente de validación del contrato de reprogramación con el responsable
+del módulo `booking`.
 
 ## Fecha
 
@@ -83,8 +84,7 @@ Sprint 2 demuestran que `AFTER_COMMIT` no es suficiente.
 ## Dependencias y pendientes
 
 - Confirmar con Miguel los nombres y campos definitivos de los eventos.
-- Confirmar si existe `BookingRescheduledEvent` dentro del alcance de HU-09.
-- Confirmar el número de migración Flyway disponible para `notification_delivery`.
+- Publicar `BookingRescheduledEvent` desde `booking` cuando exista la operación de reprogramación.
 - Definir la política de retención de registros de correo.
 
 ## Trazabilidad

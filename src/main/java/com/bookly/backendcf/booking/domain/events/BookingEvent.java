@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public sealed interface BookingEvent
-        permits BookingCreatedEvent, BookingCancelledEvent {
+        permits BookingCreatedEvent, BookingCancelledEvent, BookingRescheduledEvent {
 
     UUID getEventId();
 

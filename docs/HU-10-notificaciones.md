@@ -63,6 +63,61 @@ y para evitar que `notification` dependa directamente de las entidades JPA de ot
 - El envío se realiza mediante un puerto de aplicación; SMTP o el proveedor externo queda aislado
   en infraestructura.
 
+## Diseño de persistencia de notificaciones
+
+### Tabla `notification_delivery`
+
+La tabla registra cada notificación asociada a un evento de reserva. La reserva conserva el estado
+de negocio; esta tabla conserva el estado técnico del intento de entrega del correo.
+
+| Columna | Tipo propuesto | Nulable | Regla |
+|---|---|---:|---|
+| `id` | UUID | No | Clave primaria |
+| `event_id` | UUID | No | Identificador único del evento procesado |
+| `booking_id` | UUID | No | FK a `bookings(id)` |
+| `event_type` | VARCHAR(40) | No | `BOOKING_CREATED`, `BOOKING_RESCHEDULED` o `BOOKING_CANCELLED` |
+| `recipient_email` | VARCHAR(320) | No | Destinatario normalizado |
+| `subject` | VARCHAR(200) | No | Asunto utilizado para el envío |
+| `status` | VARCHAR(20) | No | `PENDING`, `SENT` o `FAILED` |
+| `attempts` | INTEGER | No | Inicia en cero; no puede ser negativo |
+| `created_at` | TIMESTAMPTZ | No | Fecha de creación del registro |
+| `sent_at` | TIMESTAMPTZ | Sí | Fecha del envío exitoso |
+| `last_attempt_at` | TIMESTAMPTZ | Sí | Fecha del último intento |
+| `error_message` | TEXT | Sí | Error técnico resumido, sin secretos |
+
+### Restricciones
+
+- `id` es la clave primaria.
+- `booking_id` referencia `bookings(id)` y no utiliza `ON DELETE CASCADE`.
+- `event_id` es único para garantizar idempotencia y evitar duplicar un correo por evento.
+- `event_type` solo admite los tres tipos definidos por el contrato.
+- `status` solo admite `PENDING`, `SENT` y `FAILED`.
+- `attempts >= 0`.
+- `sent_at` debe estar informado cuando `status = 'SENT'`.
+- Una notificación marcada como `SENT` no debe volver a procesarse.
+
+### Índices
+
+| Índice | Propósito |
+|---|---|
+| Único sobre `event_id` | Evitar envíos duplicados |
+| `(status, last_attempt_at)` | Buscar pendientes y fallidas reintentables |
+| `(booking_id, created_at DESC)` | Consultar el historial de una reserva |
+| `(event_type, created_at DESC)` | Consultar envíos por tipo de evento |
+
+### Flujo de estados
+
+```text
+PENDING ── envío exitoso ──> SENT
+PENDING ── error temporal ──> PENDING (nuevo intento)
+PENDING ── error permanente ──> FAILED
+FAILED  ── reintento autorizado ──> PENDING
+```
+
+La tabla debe crearse mediante una migración Flyway dentro del rango asignado a HU-10. El número
+definitivo de la migración queda pendiente de confirmar porque el repositorio ya contiene las
+migraciones `V40`, `V41` y `V42`.
+
 ## Decisiones pendientes con Miguel
 
 - Confirmar los nombres definitivos de `BookingRescheduled` y `BookingCancelled`.

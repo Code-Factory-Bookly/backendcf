@@ -130,6 +130,7 @@ class CancelBookingServiceTest {
 
         BookingCancelledEvent event = eventCaptor.getValue();
 
+        assertNotNull(event.getEventId());
         assertEquals(bookingId, event.getBookingId());
         assertEquals(customerId, event.getCustomerId());
         assertEquals(booking.getProfessionalId(), event.getProfessionalId());

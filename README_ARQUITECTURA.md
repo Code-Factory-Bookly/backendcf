@@ -259,3 +259,80 @@ contra PostgreSQL 16 en contenedor: Flyway validó las cinco migraciones y dejó
 las tablas `app_user`, `platform` y `servicios`. También se verificó que un endpoint protegido responde
 `401` con el contrato uniforme. Las pruebas automatizadas, Quality Gate y la evidencia funcional
 detallada pertenecen al rol de Calidad.
+
+## 13. Componentes de HU-10: notificaciones de reserva
+
+El siguiente diagrama documenta la integración propuesta entre `booking` y `notification` dentro del
+monolito modular. `notification` depende de contratos de eventos y no de las entidades JPA internas
+de `booking`, `auth`, `catalog` o `professional`.
+
+```mermaid
+flowchart LR
+    BC[Booking application service]
+    EP[Booking event publisher]
+    EV[BookingCreated / BookingRescheduled / BookingCancelled]
+
+    subgraph Notification[Modulo notification]
+        L["Event listener<br/>AFTER_COMMIT"]
+        S[Notification application service]
+        P[EmailNotificationPort]
+        R[NotificationDelivery repository]
+        M[(notification_delivery)]
+    end
+
+    A["Email adapter<br/>SMTP o proveedor externo"]
+    DB[(PostgreSQL)]
+
+    BC --> EP
+    EP --> EV
+    EV --> L
+    L --> S
+    S --> R
+    R --> M
+    M --> DB
+    S --> P
+    P --> A
+```
+
+### Responsabilidades
+
+| Componente | Responsabilidad |
+|---|---|
+| `BookingEventPublisher` | Publicar el contrato de eventos de reserva |
+| `NotificationEventListener` | Recibir eventos después del commit |
+| `NotificationService` | Seleccionar plantilla, registrar el intento y coordinar el envío |
+| `EmailNotificationPort` | Contrato de aplicación para enviar correos |
+| `EmailNotificationAdapter` | Integrar SMTP o el proveedor configurado |
+| `NotificationDeliveryRepository` | Consultar y persistir estados de entrega |
+| `notification_delivery` | Fuente de verdad del estado técnico del envío |
+
+Este diseño se encuentra en estado propuesto hasta que Miguel confirme la estructura final de los
+eventos de HU-08/HU-09. La decisión completa está documentada en
+[ADR-011](docs/ADR-011-notificaciones-por-eventos.md).
+
+## 14. Vista de despliegue de HU-10
+
+```mermaid
+flowchart TB
+    Client[Cliente REST o frontend]
+
+    subgraph Compose[Docker Compose]
+        API["Bookly API<br/>Spring Boot / Java 17<br/>Puerto 8080"]
+        DB[("PostgreSQL 16<br/>bookings y notification_delivery")]
+    end
+
+    Provider["Proveedor de correo<br/>SMTP o API externa"]
+
+    Client -->|HTTPS /api/v1| API
+    API -->|JPA / Flyway| DB
+    API -->|EmailNotificationPort| Provider
+```
+
+La API y PostgreSQL se despliegan en el entorno contenerizado existente. El proveedor de correo no
+forma parte de la imagen del backend: sus credenciales se inyectan mediante variables de entorno o
+secretos del entorno. En pruebas se utilizará un adaptador controlado que no dependa de un proveedor
+externo.
+
+El módulo mantiene el backend stateless; el estado transaccional de la reserva y el estado técnico
+de la entrega permanecen en PostgreSQL. El envío es eventual y no debe revertir una reserva que ya
+fue confirmada.

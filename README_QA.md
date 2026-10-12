@@ -1,4 +1,4 @@
-# Calidad de software - Sprint 1
+# Calidad de software - Sprint 1 y Sprint 2
 
 ## 1. Propósito y alcance
 
@@ -242,3 +242,76 @@ Para Sprint 3: automatizar los criterios de aceptación Gherkin restantes y suma
 
 ### revisado por Adrian Espinosa
 ### co-redactado con codex.
+
+## 11. HU-10 — Notificaciones de reserva
+
+### Alcance probado
+
+La implementación actual de HU-10 consume los eventos disponibles en `main`:
+
+- `BookingCreatedEvent` para la confirmación de reserva.
+- `BookingCancelledEvent` para la notificación de cancelación.
+- `BookingRescheduledEvent` queda fuera de esta ejecución porque todavía no existe en el contrato
+  de `booking`.
+
+El adaptador `LoggingEmailNotificationAdapter` se mantiene como valor predeterminado para que las
+pruebas no dependan de un servidor externo. `SmtpEmailNotificationAdapter` permite activar un
+proveedor real mediante variables de entorno, sin credenciales en el repositorio.
+
+### Trazabilidad Gherkin → pruebas
+
+| Escenario | Prueba automatizada | Estado |
+|---|---|---|
+| Se procesa una confirmación y se registra como enviada | `NotificationServiceTest.procesaCreacionYMarcaElCorreoComoEnviado` | Cubierto |
+| Un fallo del proveedor se registra como `FAILED` | `NotificationServiceTest.registraFalloDelProveedorSinPropagarLaExcepcion` | Cubierto |
+| El mismo evento no genera un segundo correo | `NotificationServiceTest.eventoYaProcesadoNoVuelveAEnviarCorreo` | Cubierto |
+| El evento de cancelación contiene los datos de la reserva | `CancelBookingServiceTest` — captura de `BookingCancelledEvent` | Cubierto |
+| El evento tiene identificador único para idempotencia | `BookingDtoTests.bookingCreatedEventConstructor`, `CancelBookingServiceTest` | Cubierto |
+| El listener procesa después del commit | `BookingNotificationListenerIntegrationTest.procesaElEventoSoloDespuesDelCommit` | Cubierto |
+| El listener no procesa un rollback | `BookingNotificationListenerIntegrationTest.noProcesaElEventoCuandoLaTransaccionHaceRollback` | Cubierto |
+
+### Criterios negativos y de seguridad
+
+- El correo no se envía dos veces para el mismo `eventId`.
+- Un error del adaptador no propaga la excepción hacia la operación de reserva.
+- El error técnico se conserva en `notification_delivery` sin credenciales ni tokens.
+- La información de cliente, servicio y profesional se resuelve mediante puertos de lectura.
+- La notificación se procesa con `AFTER_COMMIT`; no debe revertir una reserva confirmada.
+
+### Evidencia ejecutada
+
+Pruebas focalizadas ejecutadas correctamente:
+
+```bash
+./mvnw -q -Dtest=NotificationServiceTest,BookingDtoTests,CancelBookingServiceTest test
+```
+
+Resultado: **29 pruebas ejecutadas, 0 fallos y 0 errores**.
+
+Compilación verificada:
+
+```bash
+./mvnw -q -DskipTests compile
+```
+
+La migración `V43__create_notification_delivery.sql` también fue aplicada contra PostgreSQL 16.15
+en Docker. Se verificaron la tabla, la FK hacia `bookings`, la unicidad de `event_id`, las
+restricciones `CHECK` y los índices operativos. La migración `V44__cascade_notification_delivery_booking.sql`
+ajusta la FK para que la limpieza de una reserva no quede bloqueada por su registro técnico.
+
+Suite completa ejecutada con una base PostgreSQL de pruebas en `localhost:55432`:
+
+```bash
+./mvnw test
+```
+
+Resultado de la suite base: **264 pruebas ejecutadas, 0 fallos y 0 errores**.
+
+Con las pruebas de integración `AFTER_COMMIT`, SMTP y contrato de reprogramación incorporadas, la
+suite completa actual queda en **268 pruebas ejecutadas, 0 fallos y 0 errores**.
+
+### Pendientes de QA para cerrar HU-10
+
+1. Validar el contenido final de las plantillas con datos representativos del negocio.
+2. Configurar y probar las credenciales SMTP del entorno de despliegue, sin incorporarlas al código.
+3. Agregar casos de reprogramación cuando `booking` publique `BookingRescheduledEvent`.

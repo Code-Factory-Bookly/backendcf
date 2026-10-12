@@ -1,0 +1,10 @@
+Hola {{customerName}},
+
+Tu reserva fue cancelada.
+
+Servicio: {{serviceName}}
+Profesional: {{professionalName}}
+Fecha y hora original: {{dateTime}}
+Motivo: {{cancellationReason}}
+
+Si necesitas ayuda, contacta a soporte de Bookly.

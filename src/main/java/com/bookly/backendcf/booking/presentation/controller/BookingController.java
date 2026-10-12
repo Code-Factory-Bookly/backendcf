@@ -37,14 +37,14 @@ public class BookingController {
     @GetMapping("/cliente/{customerId}")
     public List<BookingResponse> getByCustomer(@PathVariable UUID customerId, Authentication authentication) {
         ownershipGuard.check(customerId, authentication);
-        return bookingRepository.findByCustomerId(customerId).stream().map(BookingResponse::new).toList();
+        return bookingRepository.findByCustomerId(customerId).stream().map(BookingResponse::from).toList();
     }
 
     @GetMapping("/profesional/{professionalId}")
     public List<BookingResponse> getByProfessional(
             @PathVariable UUID professionalId, Authentication authentication) {
         ownershipGuard.check(professionalId, authentication);
-        return bookingRepository.findByProfessionalId(professionalId).stream().map(BookingResponse::new).toList();
+        return bookingRepository.findByProfessionalId(professionalId).stream().map(BookingResponse::from).toList();
     }
 
     @PostMapping

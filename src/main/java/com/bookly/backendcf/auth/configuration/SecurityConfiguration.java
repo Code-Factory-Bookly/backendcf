@@ -161,6 +161,7 @@ public class SecurityConfiguration {
     ) throws IOException {
 
         response.setStatus(status);
+        response.setCharacterEncoding("UTF-8");
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
         response.getWriter().write(

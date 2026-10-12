@@ -118,7 +118,10 @@ public class SecurityConfiguration {
                                 HttpMethod.PATCH,
                                 "/api/v1/reservas/*/cancelacion"
                         ).hasRole("CUSTOMER")
-
+                        // Disponibilidad de agenda: acción del cliente (HU-07)
+                        .requestMatchers(
+                                HttpMethod.GET, "/api/v1/disponibilidad"
+                        ).hasRole("CUSTOMER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

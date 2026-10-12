@@ -123,7 +123,22 @@ flowchart LR
 | `RegisterProfessionalService` | Normalización, creación de la cuenta `PROFESSIONAL` y su perfil en una transacción, y traducción del correo duplicado a `409` |
 | `ProfessionalRepository` | Persistencia del perfil en `profesionales`, con el mismo `id` que la cuenta |
 
+### Componentes de HU-07 (consulta de disponibilidad de agenda)
 
+El módulo `availability` no tiene tablas propias: calcula los bloques libres a partir de los datos de
+`schedule`, `catalog`, `professional` y `booking`, que consulta a través del puerto `AvailabilityQuery`.
+
+| Componente | Responsabilidad |
+|---|---|
+| `AvailabilityController` | `GET /api/v1/disponibilidad` con `profesionalId`, `servicioId`, `desde` y `hasta`; solo rol CUSTOMER |
+| `AvailabilityService` | Valida el rango (máximo 31 días, no pasado), verifica profesional y servicio activo y arma la respuesta; informa cuando no hay cupos |
+| `AvailabilityQuery` | Puerto que declara los datos necesarios: existencia del profesional, duración del servicio, franjas semanales y reservas ocupadas |
+| `AvailabilityQueryAdapter` | Implementa el puerto con `ProfessionalRepository`, `ServiceOfferingRepository`, `WeeklySlotRepository` y `BookingRepository` |
+| `AvailabilityCalculator` | Regla de dominio: genera bloques consecutivos con la duración del servicio y descarta los pasados y los solapados con reservas `CONFIRMADA` |
+| `InvalidAvailabilityQueryException` | Parámetros faltantes o inválidos; `GlobalExceptionHandler` la traduce a `400 VALIDATION_ERROR` |
+
+La consulta es informativa: no bloquea bloques. La integridad ante reservas simultáneas sigue
+garantizada por `POST /api/v1/reservas` (ver ADR-006).
 
 ## 7. Flujo de login
 
@@ -249,6 +264,11 @@ src/main/java/com/bookly/backendcf/
 │   ├── infrastructure/    # repositorios JPA
 │   ├── presentation/      # controlador y DTOs REST
 │   └── security/           # emisión y filtro JWT
+├── availability/
+│   ├── application/       # caso de uso y puerto de consulta
+│   ├── domain/model/      # reglas de cálculo de bloques libres
+│   ├── infrastructure/    # adaptador sobre los repositorios de otros módulos
+│   └── presentation/      # controlador y DTO REST
 └── shared/error/          # errores HTTP uniformes
 ```
 

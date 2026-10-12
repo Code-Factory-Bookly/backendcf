@@ -1,0 +1,10 @@
+Hola {{customerName}},
+
+Tu reserva fue reprogramada.
+
+Servicio: {{serviceName}}
+Profesional: {{professionalName}}
+Horario anterior: {{previousDateTime}}
+Nuevo horario: {{dateTime}}
+
+Gracias por usar Bookly.

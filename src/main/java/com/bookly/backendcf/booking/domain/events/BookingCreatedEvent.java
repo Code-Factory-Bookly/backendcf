@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public final class BookingCreatedEvent implements BookingEvent {
+    private final UUID eventId;
     private final UUID bookingId;
     private final UUID customerId;
     private final UUID professionalId;
@@ -14,6 +15,7 @@ public final class BookingCreatedEvent implements BookingEvent {
 
     public BookingCreatedEvent(UUID bookingId, UUID customerId, UUID professionalId, UUID serviceId,
                                LocalDateTime startTime, LocalDateTime endTime) {
+        this.eventId = UUID.randomUUID();
         this.bookingId = bookingId;
         this.customerId = customerId;
         this.professionalId = professionalId;
@@ -23,6 +25,8 @@ public final class BookingCreatedEvent implements BookingEvent {
         this.occurredAt = LocalDateTime.now();
     }
 
+    @Override
+    public UUID getEventId() { return eventId; }
     @Override
     public UUID getBookingId() { return bookingId; }
     @Override

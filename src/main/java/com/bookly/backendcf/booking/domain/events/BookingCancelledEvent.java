@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public final class BookingCancelledEvent implements BookingEvent {
 
+    private final UUID eventId;
     private final UUID bookingId;
     private final UUID customerId;
     private final UUID professionalId;
@@ -26,6 +27,7 @@ public final class BookingCancelledEvent implements BookingEvent {
             LocalDateTime cancelledAt,
             String cancellationReason
     ) {
+        this.eventId = UUID.randomUUID();
         this.bookingId = bookingId;
         this.customerId = customerId;
         this.professionalId = professionalId;
@@ -35,6 +37,11 @@ public final class BookingCancelledEvent implements BookingEvent {
         this.cancelledAt = cancelledAt;
         this.cancellationReason = cancellationReason;
         this.occurredAt = LocalDateTime.now();
+    }
+
+    @Override
+    public UUID getEventId() {
+        return eventId;
     }
 
     @Override

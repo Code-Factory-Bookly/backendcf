@@ -1,4 +1,4 @@
-# Base de datos - Sprint 1
+# Base de datos - Sprint 1 y Sprint 2
 
 ## 1. Propósito y alcance
 
@@ -376,10 +376,13 @@ docker compose exec db psql -U backendcf -d backendcf -c '\d app_user'
 docker compose exec db psql -U backendcf -d backendcf -c '\d platform'
 docker compose exec db psql -U backendcf -d backendcf -c '\d servicios'
 docker compose exec db psql -U backendcf -d backendcf -c '\d profesionales'
+docker compose exec db psql -U backendcf -d backendcf -c '\d bookings'
+docker compose exec db psql -U backendcf -d backendcf -c '\d notification_delivery'
 docker compose exec db psql -U backendcf -d backendcf -c 'SELECT installed_rank, version, description FROM flyway_schema_history ORDER BY installed_rank;'
 ```
 
-La verificación esperada es que el historial termine en la versión `6 - create professionals` y
+La verificación esperada para el Sprint 2 es que el historial incluya `V30`, `V40`, `V41`, `V42` y
+termine en la versión `43 - create notification delivery`, con
 que todas las migraciones tengan `success = true`. En bases existentes, V1 puede aparecer como
 `<< Flyway Baseline >>` y las versiones posteriores se aplican normalmente.
 
@@ -401,3 +404,112 @@ y un nuevo `docker compose up --build`.
 ## 10. Pendientes de evolución
 
 Para los siguientes sprints se deberán agregar y relacionar las entidades que surjan de las HU: profesional, disponibilidad, reserva, cancelación e historial. También se deberán completar auditoría de acciones críticas, roles de base de datos con mínimo privilegio, pruebas de restauración y procedimientos o triggers únicamente cuando exista una regla que justifique su ejecución dentro de PostgreSQL.
+
+## 11. Sprint 2: reservas y notificaciones de HU-10
+
+El Sprint 2 agrega `bookings` para las reservas y `notification_delivery` para registrar el estado
+técnico de los correos asociados a eventos de reserva. La reserva mantiene la fuente de verdad del
+estado de negocio; la tabla de notificaciones no modifica ni duplica ese estado.
+
+### Relación entre reservas y notificaciones
+
+```mermaid
+erDiagram
+    BOOKINGS {
+        UUID id PK
+        UUID customer_id FK
+        UUID professional_id FK
+        UUID service_id FK
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+        VARCHAR status
+    }
+    NOTIFICATION_DELIVERY {
+        UUID id PK
+        UUID event_id UK
+        UUID booking_id FK
+        VARCHAR event_type
+        VARCHAR recipient_email
+        VARCHAR subject
+        VARCHAR status
+        INTEGER attempts
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ sent_at
+        TIMESTAMPTZ last_attempt_at
+        TEXT error_message
+    }
+    BOOKINGS ||--o{ NOTIFICATION_DELIVERY : "genera"
+```
+
+Una reserva puede generar una notificación por creación y otra por cancelación. La reprogramación
+queda pendiente de que exista `BookingRescheduledEvent` en el contrato de `booking`.
+
+### Modelo lógico de `notification_delivery`
+
+| Atributo | Tipo lógico | Nulabilidad | Clave / dominio | Descripción |
+|---|---|---:|---|---|
+| `id` | UUID | No | PK | Identificador del registro de entrega |
+| `event_id` | UUID | No | UK | Idempotencia del evento procesado |
+| `booking_id` | UUID | No | FK a `bookings.id` | Reserva que originó la notificación |
+| `event_type` | Enumeración | No | `BOOKING_CREATED`, `BOOKING_CANCELLED` | Tipo de evento implementado |
+| `recipient_email` | Cadena de correo | No | Máximo 320 | Destinatario normalizado |
+| `subject` | Cadena | No | Máximo 200 | Asunto del correo |
+| `status` | Enumeración | No | `PENDING`, `SENT`, `FAILED` | Estado técnico del envío |
+| `attempts` | Entero | No | Mayor o igual a 0 | Número de intentos |
+| `created_at` | Fecha-hora con zona | No | — | Creación del registro |
+| `sent_at` | Fecha-hora con zona | Sí | Obligatoria cuando `SENT` | Envío exitoso |
+| `last_attempt_at` | Fecha-hora con zona | Sí | — | Último intento |
+| `error_message` | Texto | Sí | Obligatorio cuando `FAILED` | Error técnico resumido |
+
+### Modelo físico y restricciones
+
+La tabla se implementa mediante `V43__create_notification_delivery.sql`; la FK se ajusta en
+`V44__cascade_notification_delivery_booking.sql` para que la limpieza de una reserva no quede
+bloqueada por su registro técnico de entrega. PostgreSQL garantiza:
+
+- FK de `booking_id` hacia `bookings(id)` con `ON DELETE CASCADE`, limitada a los registros técnicos de entrega;
+- unicidad de `event_id` para impedir correos duplicados;
+- dominios válidos para `event_type` y `status`;
+- `attempts >= 0`;
+- consistencia entre `status` y `sent_at`;
+- mensaje de error obligatorio cuando el estado es `FAILED`.
+
+Los índices de operación son:
+
+| Índice | Consulta soportada |
+|---|---|
+| `uk_notification_delivery_event` | Idempotencia por evento |
+| `ix_notification_delivery_status_attempt` | Lotes pendientes o fallidos para reintento |
+| `ix_notification_delivery_booking_created` | Historial de notificaciones de una reserva |
+| `ix_notification_delivery_type_created` | Seguimiento por tipo de evento |
+
+### Consultas operativas de HU-10
+
+```sql
+-- Notificaciones que pueden procesarse o reintentarse
+SELECT id, event_id, booking_id, recipient_email, attempts
+FROM notification_delivery
+WHERE status IN ('PENDING', 'FAILED')
+ORDER BY last_attempt_at NULLS FIRST
+LIMIT 100;
+
+-- Historial de notificaciones de una reserva
+SELECT event_type, status, attempts, created_at, sent_at, error_message
+FROM notification_delivery
+WHERE booking_id = :booking_id
+ORDER BY created_at DESC;
+
+-- Entregas agrupadas por estado y tipo
+SELECT event_type, status, COUNT(*) AS total
+FROM notification_delivery
+GROUP BY event_type, status
+ORDER BY event_type, status;
+```
+
+### Verificación realizada
+
+La migración `V43` fue aplicada correctamente contra PostgreSQL 16.15 en el entorno Docker de
+desarrollo. Se verificaron la tabla, la FK, la restricción única, las restricciones `CHECK` y los
+tres índices de `notification_delivery`. En una base con versiones de ramas paralelas, Flyway
+requirió validación temporal con `outOfOrder=true`; esta configuración debe formalizarse para el
+entorno local sin utilizarla como sustituto del orden correcto en producción.

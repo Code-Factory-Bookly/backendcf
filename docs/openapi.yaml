@@ -2,7 +2,13 @@ openapi: 3.0.3
 info:
   title: Bookly Backend API
   version: 1.0.0
-  description: API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-07,    HU-19, HU-20 y HU-22.
+  description: >-
+    API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-04, HU-07, HU-08,
+    HU-09, HU-17, HU-18, HU-19, HU-20 y HU-22. HU-10 no agrega endpoints REST:
+    sus notificaciones se procesan internamente a partir de eventos de reserva.
+externalDocs:
+  description: Diseño y contrato interno de notificaciones de HU-10
+  url: HU-10-notificaciones.md
 servers:
   - url: http://localhost:8080/api/v1
 tags:

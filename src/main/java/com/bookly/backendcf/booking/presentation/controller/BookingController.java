@@ -3,14 +3,18 @@ package com.bookly.backendcf.booking.presentation.controller;
 import com.bookly.backendcf.booking.application.service.CreateBookingService;
 import com.bookly.backendcf.booking.application.exception.BookingConflictException;
 import com.bookly.backendcf.booking.domain.model.Booking;
+import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
+import com.bookly.backendcf.booking.presentation.dto.BookingResponse;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingRequest;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingResponse;
+import com.bookly.backendcf.shared.security.OwnershipGuard;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,9 +22,29 @@ import java.util.UUID;
 public class BookingController {
 
     private final CreateBookingService createBookingService;
+    private final BookingRepository bookingRepository;
+    private final OwnershipGuard ownershipGuard;
 
-    public BookingController(CreateBookingService createBookingService) {
+    public BookingController(
+            CreateBookingService createBookingService,
+            BookingRepository bookingRepository,
+            OwnershipGuard ownershipGuard) {
         this.createBookingService = createBookingService;
+        this.bookingRepository = bookingRepository;
+        this.ownershipGuard = ownershipGuard;
+    }
+
+    @GetMapping("/cliente/{customerId}")
+    public List<BookingResponse> getByCustomer(@PathVariable UUID customerId, Authentication authentication) {
+        ownershipGuard.check(customerId, authentication);
+        return bookingRepository.findByCustomerId(customerId).stream().map(BookingResponse::new).toList();
+    }
+
+    @GetMapping("/profesional/{professionalId}")
+    public List<BookingResponse> getByProfessional(
+            @PathVariable UUID professionalId, Authentication authentication) {
+        ownershipGuard.check(professionalId, authentication);
+        return bookingRepository.findByProfessionalId(professionalId).stream().map(BookingResponse::new).toList();
     }
 
     @PostMapping

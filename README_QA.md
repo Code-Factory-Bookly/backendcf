@@ -337,3 +337,76 @@ suite completa actual queda en **268 pruebas ejecutadas, 0 fallos y 0 errores**.
 1. Validar el contenido final de las plantillas con datos representativos del negocio.
 2. Configurar y probar las credenciales SMTP del entorno de despliegue, sin incorporarlas al código.
 3. Agregar casos de reprogramación cuando `booking` publique `BookingRescheduledEvent`.
+
+## 12. HU-04 — Horario de atención semanal del profesional
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Profesional configura su horario semanal | `WeeklyScheduleServiceTest.guardaHorarioValidoYReemplazaElAnterior`, `WeeklyScheduleServiceTest.aceptaFranjasContiguas` | Cubierto |
+| Intento de definir franjas superpuestas | `WeeklyScheduleServiceTest.rechazaFranjasSuperpuestasConElDetalleDelConflicto`, `WeeklyScheduleServiceTest.rechazaHoraFinAnteriorALaDeInicio` | Cubierto |
+| Control adicional: profesional inexistente | `WeeklyScheduleServiceTest.profesionalInexistenteDevuelveNotFound` | Cubierto |
+| Control adicional: autorización (dueño o ADMIN) | `ScheduleControllerSecurityTest.sinTokenDevuelveUnauthorized/clienteDevuelveForbidden/profesionalNoPuedeEditarHorarioAjeno/profesionalPuedeEditarSuPropioHorario` | Cubierto |
+
+El solapamiento se valida en el servicio, no con una restricción de exclusión en la base (`uk_horario_semanal_inicio` solo impide dos franjas con la misma hora de inicio exacta). Queda como mejora si el equipo la quiere (ver ADR-006).
+
+## 13. HU-17 — Asignación de roles y permisos (RBAC)
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Asignar un rol a un usuario | `RoleAssignmentServiceTest.clienteSeConvierteEnProfesionalCreandoSuPerfil`, `UserRoleControllerSecurityTest.administradorPuedeAsignarRoles` | Cubierto |
+| Intento fallido de cambiar el rol de un usuario con compromisos activos | `RoleAssignmentServiceTest.profesionalConPerfilNoPuedeVolverseCliente` (bloquea por perfil profesional existente, no por citas activas — ver nota) | Cubierto parcialmente |
+| Usuario intenta acceder a una función fuera de sus permisos | `UserRoleControllerSecurityTest.sinTokenDevuelveUnauthorized/clienteNoPuedeAsignarRoles/profesionalNoPuedeAsignarRoles` | Cubierto |
+| Control adicional: especialidad obligatoria al promover a PROFESSIONAL | `RoleAssignmentServiceTest.clienteAProfesionalSinEspecialidadEsRechazado` | Cubierto |
+| Control adicional: cambio al mismo rol es una operación nula | `RoleAssignmentServiceTest.mismoRolNoModificaNada` | Cubierto |
+| Control adicional: búsqueda de usuarios para asignar el rol (`GET /usuarios/buscar`) | `RoleAssignmentServiceTest.busquedaSinTextoDevuelveSugerenciasExistentes/busquedaConTextoFiltraPorCorreoONombreYMarcaPerfilProfesional/busquedaConUnSoloCaracterSeTrataComoSinTexto`, `UserRoleControllerSecurityTest.busquedaSinTokenDevuelveUnauthorized/busquedaClienteDevuelveForbidden/busquedaAdministradorDevuelveCoincidencias/busquedaSinParametroQUsaCadenaVacia` | Cubierto |
+
+**Pendiente conocido, no cubierto por diseño:** el Gherkin de HU-17 pide rechazar el cambio de rol cuando el usuario tiene "citas activas programadas". Lo que el código hoy rechaza es distinto: un `PROFESSIONAL` con **perfil creado** no puede cambiar a otro rol (`409 ROLE_CHANGE_CONFLICT`), sin consultar reservas. El escenario literal depende de que `booking` exponga una consulta de reservas activas por usuario; no existe todavía esa integración entre los módulos `auth` y `booking`.
+
+**Pendiente conocido, no cubierto:** el rol viaja dentro del JWT ya emitido. Un cambio de rol no revoca ni invalida los tokens activos de ese usuario — siguen autorizando con el rol anterior hasta que expiren (hasta 1 hora). El criterio de aceptación pide que el cambio se refleje "de inmediato"; eso requeriría resolver el rol contra la base en cada petición o un mecanismo de revocación de tokens, ninguno de los dos implementado.
+
+## 14. HU-08 — Creación y agendamiento de reserva
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Reserva exitosa sobre una franja disponible | `CreateBookingServiceTest.shouldCreateBookingSuccessfully`, `BookingControllerTest.shouldCreateBookingSuccessfully/shouldUseAuthenticatedCustomerId` | Cubierto |
+| Dos clientes intentan reservar la misma franja de forma simultánea (condición de carrera) | `BookingConcurrencyTest.twoSimultaneousCustomersOnlyOneBookingIsConfirmed` (concurrencia real contra PostgreSQL), `CreateBookingServiceTest.shouldRejectIfSlotOccupied`, `BookingControllerTest.shouldReturnConflictWhenSlotIsOccupied` | Cubierto |
+| Control adicional: validación del rango horario | `CreateBookingServiceTest.shouldRejectIfStartTimeAfterEndTime/shouldRejectIfStartTimeInPast`, `BookingControllerTest.shouldReturnBadRequestForInvalidTimeRange/shouldReturnBadRequestForInvalidCustomerId` | Cubierto |
+| Control adicional: lectura de reservas por dueño (`GET /reservas/cliente/{id}`, `GET /reservas/profesional/{id}`) | `BookingQuerySecurityTest.sinTokenDevuelve401/clientePuedeVerSusPropiasReservas/clienteNoPuedeVerLasReservasDeOtroClienteDevuelve403/profesionalPuedeVerSusPropiasReservas/administradorPuedeVerLasReservasDeCualquierCliente` | Cubierto |
+
+La unicidad de la franja la garantiza la base con la restricción `unique_booking_per_professional_time` (`V30__create_bookings.sql`); el servicio traduce la violación a `409 SLOT_OCUPADO` (ADR-006).
+
+**Nota de limpieza de QA:** `BookingComprehensiveTest.java` (clase `BookingComprehensiveTestFinal`) no sigue la convención de nombres de Surefire (termina en "Final", no en "Test"/"Tests") y el CI nunca la ejecuta. Si se corre a mano, 7 de sus 26 casos fallan porque mockean `bookingRepository.save()` cuando `CreateBookingService` usa `saveAndFlush()` — queda como código de prueba muerto y desactualizado, duplicado del que sí corre en `CreateBookingServiceTest`. Pendiente que el equipo de `booking` la borre o la corrija.
+
+## 15. HU-09 — Cancelación autónoma de reservas
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Cancelación exitosa dentro del tiempo permitido | `CancelBookingServiceTest.shouldCancelBookingWithThreeHoursNotice/shouldAllowCancellationAt121Minutes/shouldAllowCancellationAtExactly120Minutes`, `CancelBookingControllerTest.shouldCancelBookingSuccessfully/shouldAllowRequestWithoutReason` | Cubierto |
+| Intento de cancelación fuera del plazo de anticipación permitido | `CancelBookingServiceTest.shouldRejectCancellationWithFortyFiveMinutesNotice/shouldRejectCancellationAt119Minutes` | Cubierto |
+| Control adicional: solo el cliente dueño cancela | `CancelBookingServiceTest.shouldRejectCancellationByAnotherCustomer`, `CancelBookingControllerTest.shouldPropagateAccessDeniedForAnotherCustomer`, `CancelBookingSecurityTest.administradorNoPuedeCancelarDevuelve403/profesionalNoPuedeCancelarDevuelve403` | Cubierto |
+| Control adicional: estados inválidos | `CancelBookingServiceTest.shouldRejectAlreadyCancelledBooking/shouldRejectMissingBooking`, `CancelBookingControllerTest` (contrato HTTP) | Cubierto |
+
+El plazo mínimo (`BOOKING_CANCELLATION_MIN_ADVANCE_MINUTES`, 120 por defecto) es configurable, no está fijado en el código — ver `CancelBookingServiceTest.shouldRejectCancellationAt119Minutes` / `shouldAllowCancellationAtExactly120Minutes` para el límite exacto.
+
+## 16. HU-18 — Autenticación multifactor (MFA) para accesos administrativos
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Acceso administrativo con código MFA correcto | `MfaServiceTest.enrolamientoConCodigoValidoActivaTotpYEntregaDiezCodigosDeRecuperacion` | Cubierto |
+| Código de segundo factor incorrecto o expirado | `MfaServiceTest.codigoIncorrectoEnVerificacionRegistraIntentoFallido` | Cubierto |
+| Control adicional: no se puede reenrolar solo con la contraseña | `MfaServiceTest.noSePuedeReenrolarConSoloLaContrasena` | Cubierto |
+| Control adicional: código de recuperación de un solo uso | `MfaServiceTest.codigoDeRecuperacionDeUsoUnicoFunciona` | Cubierto |
+| Control adicional: regenerar códigos de recuperación | `MfaServiceTest.regenerarCodigosConCodigoValidoReemplazaLosAnteriores/regenerarCodigosSinMfaActivoFalla/regenerarCodigosConCodigoIncorrectoRegistraIntentoFallido`, `MfaSettingsControllerSecurityTest.regenerarDevuelveDiezCodigosNuevos` | Cubierto |
+| Control adicional: desactivar el segundo factor | `MfaServiceTest.desactivarConContrasenaYCodigoValidosLimpiaElSegundoFactor/desactivarConContrasenaIncorrectaFalla`, `MfaSettingsControllerSecurityTest.desactivarConCredencialesValidasDevuelveNoContent/desactivarSinTokenDevuelveUnauthorized` | Cubierto |
+| Control adicional: omitir el enrolamiento ("preguntar de nuevo la próxima vez", ADR-010) | `MfaServiceTest.omitirLaConfiguracionEntregaSesionSinActivarMfa/omitirLaConfiguracionConMfaYaActivoFalla` | Cubierto |
+| Control adicional: autorización de las rutas de administración del propio MFA | `MfaSettingsControllerSecurityTest.estadoSinTokenDevuelveUnauthorized/estadoClienteDevuelveForbidden/estadoAdministradorDevuelveCodigosRestantes` | Cubierto |
+
+El secreto TOTP se cifra con `MFA_ENCRYPTION_KEY` (AES-256) antes de persistirse; si esa clave cambia, los secretos ya guardados quedan indescifrables (ver README.md, sección de variables de entorno). El alcance es exclusivo de `ADMIN`: `CUSTOMER` y `PROFESSIONAL` nunca pasan por un reto de MFA al iniciar sesión.
+
+## 17. Evidencia ejecutada (Sprint 2, HU-04/08/09/17/18)
+
+```bash
+./mvnw -q -Dtest='!AvailabilityIntegrationTest,!BookingCancellationConcurrencyTest,!BookingCancellationIntegrationTest,!BookingConcurrencyTest,!BookingComprehensiveTestFinal' test
+```
+
+Ejecutado localmente contra H2 (sin la base PostgreSQL de integración que usa el CI para las pruebas de concurrencia e integración real): **303 pruebas, 0 fallos, 0 errores**, incluidas `WeeklyScheduleServiceTest`, `ScheduleControllerSecurityTest`, `RoleAssignmentServiceTest`, `UserRoleControllerSecurityTest`, `CreateBookingServiceTest`, `BookingControllerTest`, `CancelBookingServiceTest`, `CancelBookingControllerTest`, `CancelBookingSecurityTest`, `BookingQuerySecurityTest`, `MfaServiceTest` y `MfaSettingsControllerSecurityTest`. Las cuatro clases que exigen PostgreSQL real en `localhost:55432` (`AvailabilityIntegrationTest` y las tres de `booking` de concurrencia/integración) y el reporte de cobertura consolidado quedan a cargo del pipeline de CI, que sí tiene ese Postgres disponible.

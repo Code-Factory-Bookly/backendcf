@@ -7,6 +7,7 @@ import com.bookly.backendcf.catalog.application.ServiceOfferingAlreadyExistsExce
 import com.bookly.backendcf.catalog.application.ServiceOfferingService;
 import com.bookly.backendcf.catalog.domain.model.ServiceStatus;
 import com.bookly.backendcf.catalog.presentation.dto.ServiceOfferingResponse;
+import com.bookly.backendcf.professional.application.ProfessionalServiceAssignmentService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -33,6 +34,9 @@ class ServiceOfferingControllerTest {
 
     @MockitoBean
     private ServiceOfferingService serviceOfferingService;
+
+    @MockitoBean
+    private ProfessionalServiceAssignmentService professionalServiceAssignmentService;
 
     // HU-02 - Escenario Gherkin "Registro correcto de un servicio en el catálogo" a nivel de
     // contrato HTTP: el POST debe responder 201 con el servicio creado en el body JSON.

@@ -1,8 +1,8 @@
-# Arquitectura de software - Sprint 1
+# Arquitectura de software - Sprint 1 y Sprint 2
 
 ## 1. Propósito y alcance
 
-Este documento describe la arquitectura implementada del backend de Bookly para el Sprint 1. Su alcance incluye el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial), HU-22 (registro de profesionales), la persistencia y el despliegue con Docker Compose.
+Este documento describe la arquitectura implementada del backend de Bookly. Sprint 1 cubrió el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial), HU-21 (`OwnershipGuard`) y HU-22 (registro de profesionales). Sprint 2 agregó HU-04 (horario semanal), HU-07 (disponibilidad), HU-08 y HU-09 (reservas), HU-10 (notificaciones), HU-17 (roles), HU-18 (MFA) y HU-19 (auditoría) — documentadas más abajo en este mismo archivo. La persistencia y el despliegue siguen siendo PostgreSQL con Docker Compose, y producción corre en Render.
 
 La solución se mantiene como un monolito modular porque el alcance actual es pequeño, existe un único dominio principal y el equipo necesita reducir la complejidad operativa. La separación por módulos permite evolucionar a nuevos dominios sin iniciar prematuramente una arquitectura de microservicios.
 

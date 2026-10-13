@@ -362,7 +362,7 @@ El solapamiento se valida en el servicio, no con una restricción de exclusión 
 
 **Pendiente conocido, no cubierto por diseño:** el Gherkin de HU-17 pide rechazar el cambio de rol cuando el usuario tiene "citas activas programadas". Lo que el código hoy rechaza es distinto: un `PROFESSIONAL` con **perfil creado** no puede cambiar a otro rol (`409 ROLE_CHANGE_CONFLICT`), sin consultar reservas. El escenario literal depende de que `booking` exponga una consulta de reservas activas por usuario; no existe todavía esa integración entre los módulos `auth` y `booking`.
 
-**Pendiente conocido, no cubierto:** el rol viaja dentro del JWT ya emitido. Un cambio de rol no revoca ni invalida los tokens activos de ese usuario — siguen autorizando con el rol anterior hasta que expiren (hasta 1 hora). El criterio de aceptación pide que el cambio se refleje "de inmediato"; eso requeriría resolver el rol contra la base en cada petición o un mecanismo de revocación de tokens, ninguno de los dos implementado.
+**Resuelto, corrección a esta misma sección:** al escribir esta nota por primera vez decía que el rol viajaba sin validar dentro del JWT y que un cambio de rol no se reflejaba hasta que el token expirara. Eso ya no es así — `JwtAuthenticationFilter` fue corregido (MantisBT BUG-005, commit `68dfb38`) para resolver el rol contra la base en cada petición en vez de confiar en el claim del token; ese fix ya estaba en `main` cuando se escribió la nota original, solo no se había verificado contra este código. Un cambio de rol con `PUT /usuarios/{userId}/rol` ya tiene efecto inmediato en la siguiente petición del usuario afectado, sin esperar a que expire su token.
 
 ## 14. HU-08 — Creación y agendamiento de reserva
 

@@ -3,8 +3,8 @@ info:
   title: Bookly Backend API
   version: 1.0.0
   description: >-
-    API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-04, HU-07, HU-08,
-    HU-09, HU-17, HU-18, HU-19, HU-20 y HU-22. HU-10 no agrega endpoints REST:
+    API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-04, HU-06, HU-07, HU-08,
+    HU-09, HU-17, HU-18, HU-19, HU-20, HU-21 y HU-22. HU-10 no agrega endpoints REST:
     sus notificaciones se procesan internamente a partir de eventos de reserva.
 externalDocs:
   description: Diseño y contrato interno de notificaciones de HU-10
@@ -13,9 +13,11 @@ servers:
   - url: http://localhost:8080/api/v1
 tags:
   - name: Auth
+  - name: Users
   - name: Platform
   - name: Services
   - name: Professionals
+  - name: Schedule
   - name: Audit
   - name: Reservas
   - name: Availability
@@ -57,6 +59,151 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '423': { $ref: '#/components/responses/LockedError' }
+  /auth/password:
+    put:
+      tags: [ Auth ]
+      summary: Cambiar la propia contraseña
+      description: Requiere la contraseña actual. No hay recuperación por correo todavía; ver /usuarios/{userId}/clave/restablecer.
+      operationId: changeOwnPassword
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Contraseña cambiada }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /auth/mfa/enroll:
+    post:
+      tags: [ Auth ]
+      summary: Iniciar el enrolamiento del segundo factor
+      description: >-
+        Recibe el mfaToken que entregó /auth/login cuando mfaSetupRequired es true. Genera el
+        secreto TOTP (sin persistir todavía) y la URI otpauth para el QR.
+      operationId: mfaEnroll
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaEnrollRequest' }
+      responses:
+        '200':
+          description: Secreto generado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnrollmentResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /auth/mfa/enroll/confirm:
+    post:
+      tags: [ Auth ]
+      summary: Confirmar el enrolamiento con el primer código
+      description: Valida el primer código TOTP, activa el MFA y entrega la sesión ya autenticada más los códigos de recuperación (se muestran una sola vez).
+      operationId: mfaConfirmEnrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaVerifyRequest' }
+      responses:
+        '200':
+          description: MFA activado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaConfirmResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /auth/mfa/verify:
+    post:
+      tags: [ Auth ]
+      summary: Verificar el código de un login con MFA ya enrolado
+      operationId: mfaVerify
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaVerifyRequest' }
+      responses:
+        '200':
+          description: Sesión autenticada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /auth/mfa/skip:
+    post:
+      tags: [ Auth ]
+      summary: Omitir el enrolamiento del segundo factor por esta vez
+      description: No marca el MFA como activo, así que el siguiente login vuelve a ofrecer este mismo paso (ADR-010).
+      operationId: mfaSkip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaEnrollRequest' }
+      responses:
+        '200':
+          description: Sesión autenticada sin MFA
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /mfa/recovery-codes/estado:
+    get:
+      tags: [ Auth ]
+      summary: Consultar cuántos códigos de recuperación quedan
+      description: >-
+        Distinta de /auth/mfa/**: esta ruta la usa un ADMIN ya autenticado para administrar su
+        propio segundo factor, no un mfaToken de login a medias.
+      operationId: mfaRecoveryStatus
+      security: [ { bearerAuth: [ ] } ]
+      responses:
+        '200':
+          description: Códigos restantes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryStatusResponse' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /mfa/recovery-codes/regenerar:
+    post:
+      tags: [ Auth ]
+      summary: Regenerar los códigos de recuperación
+      description: Invalida los códigos anteriores. Requiere un código TOTP válido para confirmar.
+      operationId: mfaRegenerateRecoveryCodes
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaRegenerateRequest' }
+      responses:
+        '200':
+          description: Códigos nuevos (se muestran una sola vez)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaRecoveryCodesResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+  /mfa/desactivar:
+    post:
+      tags: [ Auth ]
+      summary: Desactivar el segundo factor
+      description: Requiere la contraseña y un código TOTP válido.
+      operationId: mfaDisable
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MfaDisableRequest' }
+      responses:
+        '204': { description: MFA desactivado }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
   /platform/setup:
     post:
       tags: [Platform]
@@ -149,6 +296,20 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
   /profesionales:
+    get:
+      tags: [ Professionals ]
+      summary: Listar profesionales
+      description: Lista los profesionales con los datos de su cuenta, ordenados por nombre. Solo ADMIN.
+      operationId: listProfessionals
+      security: [ { bearerAuth: [ ] } ]
+      responses:
+        '200':
+          description: Profesionales registrados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ProfessionalResponse' } }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
     post:
       tags: [ Professionals ]
       summary: Registrar profesional
@@ -173,6 +334,52 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /usuarios/buscar:
+    get:
+      tags: [ Users ]
+      summary: Buscar usuarios por correo o nombre
+      description: >-
+        Solo ADMIN. Sirve para encontrar al usuario al que se le va a asignar un rol sin conocer su
+        UUID de antemano. Con q vacío devuelve algunas sugerencias.
+      operationId: searchUsers
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, default: '' }
+      responses:
+        '200':
+          description: Usuarios encontrados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/UserSearchResult' } }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+  /usuarios/{userId}/clave/restablecer:
+    post:
+      tags: [ Users ]
+      summary: Restablecer la contraseña de un usuario a una temporal
+      description: >-
+        Solo ADMIN. No hay recuperación de contraseña por correo todavía (depende de notificaciones
+        salientes al cliente, fuera del alcance de HU-10). El ADMIN debe entregar la contraseña
+        temporal al usuario fuera de la plataforma.
+      operationId: resetUserPassword
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Contraseña temporal generada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordResetResponse' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /usuarios/{userId}/rol:
     put:
       tags: [ Users ]
@@ -362,54 +569,6 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '409': { $ref: '#/components/responses/ConflictError' }
-  /reservas/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [Reservas]
-      summary: Obtener una reserva por ID
-      operationId: getBooking
-      security: [{ bearerAuth: [] }]
-      responses:
-        '200':
-          description: Reserva encontrada
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Booking' }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '404': { $ref: '#/components/responses/NotFoundError' }
-    delete:
-      tags: [Reservas]
-      summary: Cancelar una reserva
-      operationId: cancelBooking
-      security: [{ bearerAuth: [] }]
-      responses:
-        '204': { description: Reserva cancelada exitosamente }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '404': { $ref: '#/components/responses/NotFoundError' }
-    put:
-      tags: [Reservas]
-      summary: Reprogramar una reserva
-      operationId: rescheduleBooking
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/RescheduleBookingRequest' }
-      responses:
-        '200':
-          description: Reserva reprogramada exitosamente
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Booking' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '401': { $ref: '#/components/responses/UnauthorizedError' }
-        '404': { $ref: '#/components/responses/NotFoundError' }
   /reservas/cliente/{customerId}:
     parameters:
       - name: customerId
@@ -505,12 +664,6 @@ components:
         startTime: { type: string, format: date-time }
         endTime: { type: string, format: date-time }
         status: { type: string, enum: [CONFIRMADA, CANCELADA, RESCHEDULED, COMPLETED] }
-    RescheduleBookingRequest:
-      type: object
-      required: [startTime, endTime]
-      properties:
-        startTime: { type: string, format: date-time, description: "Nueva hora de inicio (debe ser en el futuro)" }
-        endTime: { type: string, format: date-time, description: "Nueva hora de fin (debe ser después de startTime)" }
     Booking:
       type: object
       properties:
@@ -556,6 +709,65 @@ components:
         email: { type: string, format: email }
         fullName: { type: string }
         role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password }
+        newPassword: { type: string, format: password, minLength: 8, maxLength: 64 }
+    MfaEnrollRequest:
+      type: object
+      required: [mfaToken]
+      properties:
+        mfaToken: { type: string }
+    MfaVerifyRequest:
+      type: object
+      required: [mfaToken, code]
+      properties:
+        mfaToken: { type: string }
+        code: { type: string, maxLength: 20 }
+        trustDevice: { type: boolean, default: false }
+    MfaEnrollmentResponse:
+      type: object
+      properties:
+        secret: { type: string, description: "Para ingresar manualmente si no se puede escanear el QR" }
+        otpauthUri: { type: string, description: "Se renderiza como QR en el front" }
+    MfaConfirmResponse:
+      type: object
+      properties:
+        session: { $ref: '#/components/schemas/LoginResponse' }
+        recoveryCodes: { type: array, items: { type: string }, description: "Se muestran una sola vez" }
+    MfaRecoveryStatusResponse:
+      type: object
+      properties:
+        remaining: { type: integer }
+    MfaRegenerateRequest:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+    MfaRecoveryCodesResponse:
+      type: object
+      properties:
+        recoveryCodes: { type: array, items: { type: string } }
+    MfaDisableRequest:
+      type: object
+      required: [password, code]
+      properties:
+        password: { type: string, format: password }
+        code: { type: string }
+    UserSearchResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { type: string, enum: [CUSTOMER, PROFESSIONAL, ADMIN] }
+        hasProfessionalProfile: { type: boolean, description: "Si es true, el rol de esta cuenta ya no se puede cambiar" }
+    PasswordResetResponse:
+      type: object
+      properties:
+        temporaryPassword: { type: string }
     LoginRequest:
       type: object
       required: [email, password]
@@ -564,11 +776,19 @@ components:
         password: { type: string, format: password }
     LoginResponse:
       type: object
+      description: >-
+        Si mfaRequired es true, la sesión todavía no está autenticada: accessToken y user vienen
+        en null, y hay que resolver el reto con mfaToken contra /auth/mfa/** antes de tener un
+        accessToken real.
       properties:
-        accessToken: { type: string }
-        tokenType: { type: string, example: Bearer }
+        accessToken: { type: string, nullable: true }
+        tokenType: { type: string, example: Bearer, nullable: true }
         expiresIn: { type: integer, format: int64 }
-        user: { $ref: '#/components/schemas/LoginUserSummary' }
+        user: { $ref: '#/components/schemas/LoginUserSummary', nullable: true }
+        mfaRequired: { type: boolean, description: "true solo para ADMIN con MFA exigido" }
+        mfaSetupRequired: { type: boolean, description: "true si el ADMIN todavía no tiene el segundo factor enrolado" }
+        mfaToken: { type: string, nullable: true, description: "Token de corta duración para completar el reto de MFA" }
+        deviceToken: { type: string, nullable: true, description: "Presente solo si se marcó 'confiar en este dispositivo'" }
     PlatformSetupRequest:
       type: object
       required: [name, adminEmail, adminPassword, adminFullName]

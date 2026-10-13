@@ -3,6 +3,8 @@ package com.bookly.backendcf.catalog.presentation;
 import com.bookly.backendcf.catalog.application.ServiceOfferingService;
 import com.bookly.backendcf.catalog.presentation.dto.ServiceOfferingRequest;
 import com.bookly.backendcf.catalog.presentation.dto.ServiceOfferingResponse;
+import com.bookly.backendcf.professional.application.ProfessionalServiceAssignmentService;
+import com.bookly.backendcf.professional.presentation.dto.ProfessionalSummary;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -23,15 +25,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class ServiceOfferingController {
 
     private final ServiceOfferingService serviceOfferingService;
+    private final ProfessionalServiceAssignmentService professionalServiceAssignmentService;
 
-    public ServiceOfferingController(ServiceOfferingService serviceOfferingService) {
+    public ServiceOfferingController(
+            ServiceOfferingService serviceOfferingService,
+            ProfessionalServiceAssignmentService professionalServiceAssignmentService) {
         this.serviceOfferingService = serviceOfferingService;
+        this.professionalServiceAssignmentService = professionalServiceAssignmentService;
     }
 
     @GetMapping
     public ResponseEntity<List<ServiceOfferingResponse>> list(
             @RequestParam(name = "categoria", required = false) String category) {
         return ResponseEntity.ok(serviceOfferingService.list(category));
+    }
+
+    @GetMapping("/{id}/profesionales")
+    public ResponseEntity<List<ProfessionalSummary>> professionalsForService(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(professionalServiceAssignmentService.listProfessionalsForService(id));
     }
 
     @GetMapping("/{id}")

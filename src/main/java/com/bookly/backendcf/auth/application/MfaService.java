@@ -74,7 +74,7 @@ public class MfaService {
     public Enrollment startEnrollment(String mfaToken) {
         UserAccount account = accountFromToken(mfaToken);
         // Con MFA ya activo, la contraseña sola no basta para reemplazar el segundo factor.
-        if (account.isMfaEnabled()) {
+        if (account.isMfaConfigured()) {
             throw new InvalidMfaTokenException();
         }
         String secret = secretGenerator.generate();

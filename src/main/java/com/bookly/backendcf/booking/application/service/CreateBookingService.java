@@ -9,6 +9,7 @@ import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,9 @@ public class CreateBookingService {
 
     private static final String BOOKING_UNIQUE_CONSTRAINT =
             "unique_booking_per_professional_time";
+
+    private static final String BOOKING_OVERLAP_CONSTRAINT =
+            "booking_no_overlapping_confirmed";
 
     private final BookingRepository bookingRepository;
     private final BookingEventPublisher eventPublisher;
@@ -92,11 +96,17 @@ public class CreateBookingService {
 
         } catch (DataIntegrityViolationException e) {
 
-            if (isBookingUniqueConstraintViolation(e)) {
+            if (isBookingConflictConstraintViolation(e)) {
                 throw slotOccupied();
             }
 
             throw e;
+        } catch (CannotAcquireLockException e) {
+            // PostgreSQL puede informar un deadlock al evaluar la restricción
+            // de exclusión durante dos INSERT concurrentes. Para el cliente
+            // representa el mismo resultado funcional: el horario ya fue
+            // tomado por otra solicitud.
+            throw slotOccupied();
         }
     }
 
@@ -107,7 +117,7 @@ public class CreateBookingService {
         );
     }
 
-    private boolean isBookingUniqueConstraintViolation(
+    private boolean isBookingConflictConstraintViolation(
             Throwable exception
     ) {
         Throwable current = exception;
@@ -125,21 +135,14 @@ public class CreateBookingService {
                 String constraintName =
                         constraintException.getConstraintName();
 
-                if (constraintName != null
-                        && constraintName.equalsIgnoreCase(
-                        BOOKING_UNIQUE_CONSTRAINT)) {
+                if (isBookingConflictConstraint(constraintName)) {
                     return true;
                 }
             }
 
             String message = current.getMessage();
 
-            if (message != null
-                    && message.toLowerCase(
-                    java.util.Locale.ROOT
-            ).contains(
-                    BOOKING_UNIQUE_CONSTRAINT
-            )) {
+            if (message != null && containsBookingConflictConstraint(message)) {
                 return true;
             }
 
@@ -147,6 +150,18 @@ public class CreateBookingService {
         }
 
         return false;
+    }
+
+    private boolean isBookingConflictConstraint(String constraintName) {
+        return constraintName != null
+                && (constraintName.equalsIgnoreCase(BOOKING_UNIQUE_CONSTRAINT)
+                || constraintName.equalsIgnoreCase(BOOKING_OVERLAP_CONSTRAINT));
+    }
+
+    private boolean containsBookingConflictConstraint(String message) {
+        String normalized = message.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains(BOOKING_UNIQUE_CONSTRAINT)
+                || normalized.contains(BOOKING_OVERLAP_CONSTRAINT);
     }
 
     private void validateTimeRange(

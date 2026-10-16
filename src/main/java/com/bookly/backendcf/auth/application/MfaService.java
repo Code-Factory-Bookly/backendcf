@@ -17,8 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -215,12 +217,22 @@ public class MfaService {
 
     private List<String> generateRecoveryCodes(UserAccount account, OffsetDateTime now) {
         List<String> plainCodes = new ArrayList<>();
-        for (int i = 0; i < RECOVERY_CODE_COUNT; i++) {
+        Set<String> rawCodes = new HashSet<>();
+        while (rawCodes.size() < RECOVERY_CODE_COUNT) {
             String raw = randomRecoveryCode();
-            recoveryCodes.save(new MfaRecoveryCode(account.getId(), passwordEncoder.encode(raw), now));
+            if (!rawCodes.add(raw)) {
+                continue;
+            }
             plainCodes.add(raw.substring(0, RECOVERY_CODE_HALF_LENGTH) + "-" + raw.substring(RECOVERY_CODE_HALF_LENGTH));
         }
-        return plainCodes;
+        List<MfaRecoveryCode> persistedCodes = rawCodes.stream()
+                .map(raw -> new MfaRecoveryCode(account.getId(), passwordEncoder.encode(raw), now))
+                .toList();
+        recoveryCodes.saveAllAndFlush(persistedCodes);
+        if (plainCodes.size() != RECOVERY_CODE_COUNT || persistedCodes.size() != RECOVERY_CODE_COUNT) {
+            throw new IllegalStateException("No se pudieron generar exactamente 10 códigos de recuperación");
+        }
+        return List.copyOf(plainCodes);
     }
 
     private String randomRecoveryCode() {

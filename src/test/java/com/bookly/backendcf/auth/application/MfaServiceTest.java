@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -126,7 +127,11 @@ class MfaServiceTest {
         List<String> codes = service.regenerateRecoveryCodes(admin.getId(), currentCode(secret));
 
         assertEquals(10, codes.size());
+        assertEquals(10, codes.stream().distinct().count());
         verify(recoveryCodes).deleteByUserId(admin.getId());
+        ArgumentCaptor<List<MfaRecoveryCode>> persistedCodes = ArgumentCaptor.forClass(List.class);
+        verify(recoveryCodes).saveAllAndFlush(persistedCodes.capture());
+        assertEquals(10, persistedCodes.getValue().size());
     }
 
     @Test

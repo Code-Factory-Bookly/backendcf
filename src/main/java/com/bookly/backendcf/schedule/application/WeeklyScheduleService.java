@@ -63,7 +63,7 @@ public class WeeklyScheduleService {
             }
         }
         if (!conflicts.isEmpty()) {
-            throw new ScheduleConflictException(conflicts);
+            throw new ScheduleValidationException(conflicts);
         }
 
         for (DayOfWeek day : DayOfWeek.values()) {

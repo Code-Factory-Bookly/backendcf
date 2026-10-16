@@ -12,9 +12,12 @@ import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.security.JwtTokenService;
+import com.bookly.backendcf.schedule.application.ScheduleConflictException;
+import com.bookly.backendcf.schedule.application.ScheduleValidationException;
 import com.bookly.backendcf.schedule.application.WeeklyScheduleService;
 import com.bookly.backendcf.schedule.presentation.dto.ScheduleResponse;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +95,36 @@ class ScheduleControllerSecurityTest {
                         .content(VALID_REQUEST))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.professionalId").value(ownId.toString()));
+    }
+
+    @Test
+    void horarioInvalidoDevuelveBadRequest() throws Exception {
+        when(scheduleService.replace(eq(ownId), any()))
+                .thenThrow(new ScheduleValidationException(
+                        Map.of("FRIDAY 18:00-09:00", "La hora de fin debe ser posterior a la de inicio")
+                ));
+
+        mockMvc.perform(put("/api/v1/horarios/" + ownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("SCHEDULE_VALIDATION_ERROR"));
+    }
+
+    @Test
+    void horariosSolapadosDevuelvenConflict() throws Exception {
+        when(scheduleService.replace(eq(ownId), any()))
+                .thenThrow(new ScheduleConflictException(
+                        Map.of("MONDAY 11:00-15:00", "Se superpone con MONDAY 08:00-12:00")
+                ));
+
+        mockMvc.perform(put("/api/v1/horarios/" + ownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SCHEDULE_CONFLICT"));
     }
 
     // El token solo lo acepta el filtro si la cuenta existe en la base (MantisBT BUG-005), asi que

@@ -8,6 +8,7 @@ import com.bookly.backendcf.auth.application.InvalidMfaTokenException;
 import com.bookly.backendcf.audit.application.InvalidAuditQueryException;
 import com.bookly.backendcf.availability.application.InvalidAvailabilityQueryException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
+import com.bookly.backendcf.schedule.application.ScheduleValidationException;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -174,6 +175,18 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.CONFLICT,
                 exception.getErrorCode(),
+                exception.getMessage(),
+                exception.getDetails()
+        );
+    }
+
+    @ExceptionHandler(ScheduleValidationException.class)
+    public ResponseEntity<ApiErrorResponse> handleScheduleValidation(
+            ScheduleValidationException exception
+    ) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "SCHEDULE_VALIDATION_ERROR",
                 exception.getMessage(),
                 exception.getDetails()
         );

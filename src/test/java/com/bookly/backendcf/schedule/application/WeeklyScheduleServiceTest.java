@@ -72,7 +72,14 @@ class WeeklyScheduleServiceTest {
     void rechazaHoraFinAnteriorALaDeInicio() {
         assertThatThrownBy(() -> service.replace(professionalId, request(
                 slot(DayOfWeek.FRIDAY, "18:00", "09:00"))))
-                .isInstanceOf(ScheduleConflictException.class);
+                .isInstanceOf(ScheduleValidationException.class);
+    }
+
+    @Test
+    void rechazaHoraFinIgualALaDeInicioComoErrorDeValidacion() {
+        assertThatThrownBy(() -> service.replace(professionalId, request(
+                slot(DayOfWeek.FRIDAY, "09:00", "09:00"))))
+                .isInstanceOf(ScheduleValidationException.class);
     }
 
     @Test

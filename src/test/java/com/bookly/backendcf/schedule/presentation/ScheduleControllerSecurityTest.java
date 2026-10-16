@@ -12,6 +12,7 @@ import com.bookly.backendcf.auth.domain.model.UserAccount;
 import com.bookly.backendcf.auth.domain.model.UserRole;
 import com.bookly.backendcf.auth.infrastructure.persistence.UserAccountRepository;
 import com.bookly.backendcf.auth.security.JwtTokenService;
+import com.bookly.backendcf.professional.infrastructure.persistence.ProfessionalRepository;
 import com.bookly.backendcf.schedule.application.ScheduleConflictException;
 import com.bookly.backendcf.schedule.application.ScheduleValidationException;
 import com.bookly.backendcf.schedule.application.WeeklyScheduleService;
@@ -47,6 +48,9 @@ class ScheduleControllerSecurityTest {
     @MockitoBean
     private WeeklyScheduleService scheduleService;
 
+    @MockitoBean
+    private ProfessionalRepository professionalRepository;
+
     private UserAccount ownAccount;
     private UUID ownId;
     private UUID otherId;
@@ -56,6 +60,8 @@ class ScheduleControllerSecurityTest {
         ownAccount = persistAccount(UserRole.PROFESSIONAL);
         ownId = ownAccount.getId();
         otherId = persistAccount(UserRole.PROFESSIONAL).getId();
+        when(professionalRepository.existsById(ownId)).thenReturn(true);
+        when(professionalRepository.existsById(otherId)).thenReturn(true);
         when(scheduleService.replace(eq(ownId), any()))
                 .thenReturn(new ScheduleResponse(ownId, List.of()));
     }
@@ -95,6 +101,30 @@ class ScheduleControllerSecurityTest {
                         .content(VALID_REQUEST))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.professionalId").value(ownId.toString()));
+    }
+
+    @Test
+    void profesionalInexistenteDevuelveNotFound() throws Exception {
+        UUID unknownId = UUID.randomUUID();
+        when(professionalRepository.existsById(unknownId)).thenReturn(false);
+
+        mockMvc.perform(get("/api/v1/horarios/" + unknownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("PROFESSIONAL_NOT_FOUND"));
+    }
+
+    @Test
+    void profesionalInexistenteAlActualizarDevuelveNotFound() throws Exception {
+        UUID unknownId = UUID.randomUUID();
+        when(professionalRepository.existsById(unknownId)).thenReturn(false);
+
+        mockMvc.perform(put("/api/v1/horarios/" + unknownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("PROFESSIONAL_NOT_FOUND"));
     }
 
     @Test

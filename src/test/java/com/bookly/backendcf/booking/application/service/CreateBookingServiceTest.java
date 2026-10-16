@@ -118,6 +118,38 @@ class CreateBookingServiceTest {
     }
 
     @Test
+    void shouldRejectIfStartTimeIsNull() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createBooking(
+                        customerId,
+                        professionalId,
+                        serviceId,
+                        null,
+                        LocalDateTime.now().plusDays(1)
+                )
+        );
+
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
+    void shouldRejectIfEndTimeIsNull() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createBooking(
+                        customerId,
+                        professionalId,
+                        serviceId,
+                        LocalDateTime.now().plusDays(1),
+                        null
+                )
+        );
+
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
     void shouldRejectIfStartTimeInPast() {
         LocalDateTime startTime =
                 LocalDateTime.now().minusDays(1);
@@ -253,6 +285,37 @@ class CreateBookingServiceTest {
         LocalDateTime endTime = startTime.plusMinutes(45);
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException("foreign key violation");
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        doThrow(original).when(bookingRepository)
+                .saveAndFlush(any(Booking.class));
+
+        assertSame(
+                original,
+                assertThrows(
+                        DataIntegrityViolationException.class,
+                        () -> service.createBooking(
+                                customerId, professionalId, serviceId, startTime, endTime
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldPropagateViolationFromAnotherConstraint() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+        DataIntegrityViolationException original =
+                new DataIntegrityViolationException(
+                        "other constraint",
+                        new ConstraintViolationException(
+                                "other constraint",
+                                null,
+                                "other_constraint"
+                        )
+                );
 
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime

@@ -87,9 +87,12 @@ public class CancelBookingService {
             );
         }
 
+        UUID authenticatedCustomerId;
+
         try {
-            UUID.fromString(authentication.getName());
-        } catch (IllegalArgumentException exception) {
+            authenticatedCustomerId =
+                    UUID.fromString(authentication.getName());
+        } catch (IllegalArgumentException e) {
             throw new AccessDeniedException(
                     "Identidad de cliente invalida"
             );

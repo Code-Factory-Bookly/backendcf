@@ -87,12 +87,9 @@ public class CancelBookingService {
             );
         }
 
-        UUID authenticatedCustomerId;
-
         try {
-            authenticatedCustomerId =
-                    UUID.fromString(authentication.getName());
-        } catch (IllegalArgumentException e) {
+            UUID.fromString(authentication.getName());
+        } catch (IllegalArgumentException exception) {
             throw new AccessDeniedException(
                     "Identidad de cliente invalida"
             );
@@ -107,19 +104,19 @@ public class CancelBookingService {
                         )
                 );
 
-        // ADMIN puede cancelar reservas de cualquier cliente. Los demás
-        // usuarios solo pueden cancelar sus propias reservas.
-        if (!isAdmin(authentication)
-                && !authenticatedCustomerId.equals(booking.getCustomerId())) {
-            throw new AccessDeniedException(
-                    "Solo el cliente propietario puede cancelar la reserva"
+        try {
+            ownershipGuard.check(
+                    booking.getCustomerId(),
+                    authentication
+            );
+        } catch (AccessDeniedException exception) {
+            // Las reservas inexistentes y las pertenecientes a otro cliente
+            // deben ser indistinguibles para evitar enumerar IDs válidos.
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Reserva no encontrada"
             );
         }
-
-        ownershipGuard.check(
-                booking.getCustomerId(),
-                authentication
-        );
 
         if (booking.getStatus() != BookingStatus.CONFIRMADA) {
             throw new ResponseStatusException(
@@ -169,9 +166,4 @@ public class CancelBookingService {
         return saved;
     }
 
-    private boolean isAdmin(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(authority ->
-                        "ROLE_ADMIN".equals(authority.getAuthority()));
-    }
 }

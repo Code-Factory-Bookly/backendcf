@@ -180,8 +180,15 @@ class CancelBookingServiceTest {
         when(bookingRepository.findByIdForUpdate(bookingId))
                 .thenReturn(Optional.of(booking));
 
-        assertThrows(
-                AccessDeniedException.class,
+        doThrow(new AccessDeniedException(
+                "No tiene permisos para este recurso"
+        )).when(ownershipGuard).check(
+                booking.getCustomerId(),
+                otherAuthentication
+        );
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
                 () -> service.cancelBooking(
                         bookingId,
                         otherAuthentication,
@@ -189,8 +196,14 @@ class CancelBookingServiceTest {
                 )
         );
 
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        assertEquals("Reserva no encontrada", exception.getReason());
         assertEquals(BookingStatus.CONFIRMADA, booking.getStatus());
 
+        verify(ownershipGuard).check(
+                booking.getCustomerId(),
+                otherAuthentication
+        );
         verify(bookingRepository, never()).saveAndFlush(any());
         verifyNoInteractions(eventPublisher);
     }

@@ -3,6 +3,8 @@ package com.bookly.backendcf.schedule.presentation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -125,6 +127,44 @@ class ScheduleControllerSecurityTest {
                         .content(VALID_REQUEST))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SCHEDULE_CONFLICT"));
+    }
+
+    @Test
+    void tipoNumericoEnDiaDeLaSemanaDevuelveBadRequest() throws Exception {
+        mockMvc.perform(put("/api/v1/horarios/" + ownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slots\":[{\"dayOfWeek\":1,"
+                                + "\"startTime\":\"08:00\",\"endTime\":\"12:00\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+
+        verify(scheduleService, never()).replace(eq(ownId), any());
+    }
+
+    @Test
+    void tipoNumericoEnHoraDevuelveBadRequest() throws Exception {
+        mockMvc.perform(put("/api/v1/horarios/" + ownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slots\":[{\"dayOfWeek\":\"MONDAY\","
+                                + "\"startTime\":800,\"endTime\":\"12:00\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+
+        verify(scheduleService, never()).replace(eq(ownId), any());
+    }
+
+    @Test
+    void camposObligatoriosAusentesDevuelvenBadRequest() throws Exception {
+        mockMvc.perform(put("/api/v1/horarios/" + ownId)
+                        .header("Authorization", "Bearer " + tokenService.createToken(ownAccount))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"slots\":[{}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+
+        verify(scheduleService, never()).replace(eq(ownId), any());
     }
 
     // El token solo lo acepta el filtro si la cuenta existe en la base (MantisBT BUG-005), asi que

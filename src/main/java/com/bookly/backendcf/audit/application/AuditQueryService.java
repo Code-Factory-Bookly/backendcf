@@ -25,13 +25,15 @@ public class AuditQueryService {
 
     @Transactional(readOnly = true)
     public AuditLogPageResponse find(OffsetDateTime from, OffsetDateTime to, int page, int size) {
-        validate(from, to, page, size);
+        DateRange range = resolveDateRange(from, to);
+        validate(range.from(), range.to(), page, size);
 
         PageRequest pageable = PageRequest.of(
                 page,
                 size,
                 Sort.by(Sort.Order.desc("occurredAt"), Sort.Order.desc("id")));
-        Page<AuditLog> result = auditLogQuery.findByOccurredAtBetween(from, to, pageable);
+        Page<AuditLog> result = auditLogQuery.findByOccurredAtBetween(
+                range.from(), range.to(), pageable);
 
         return new AuditLogPageResponse(
                 result.getContent().stream().map(AuditLogResponse::from).toList(),
@@ -41,12 +43,14 @@ public class AuditQueryService {
                 result.getTotalPages());
     }
 
+    private DateRange resolveDateRange(OffsetDateTime from, OffsetDateTime to) {
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime resolvedTo = to == null ? now : to;
+        OffsetDateTime resolvedFrom = from == null ? resolvedTo.minusDays(1) : from;
+        return new DateRange(resolvedFrom, resolvedTo);
+    }
+
     private void validate(OffsetDateTime from, OffsetDateTime to, int page, int size) {
-        if (from == null || to == null) {
-            throw new InvalidAuditQueryException(
-                    "El rango de fechas es obligatorio",
-                    Map.of("from", "Es obligatorio", "to", "Es obligatorio"));
-        }
         if (from.isAfter(to)) {
             throw new InvalidAuditQueryException(
                     "La fecha inicial no puede ser posterior a la fecha final",
@@ -62,5 +66,8 @@ public class AuditQueryService {
                     "El tamaño de página no es válido",
                     Map.of("size", "Debe estar entre 1 y " + MAX_PAGE_SIZE));
         }
+    }
+
+    private record DateRange(OffsetDateTime from, OffsetDateTime to) {
     }
 }

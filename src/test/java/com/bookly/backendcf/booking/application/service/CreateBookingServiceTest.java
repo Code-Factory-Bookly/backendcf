@@ -10,11 +10,14 @@ import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository
 import com.bookly.backendcf.schedule.domain.model.WeeklySlot;
 import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -117,6 +120,38 @@ class CreateBookingServiceTest {
                         serviceId,
                         startTime,
                         endTime
+                )
+        );
+
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
+    void shouldRejectIfStartTimeIsNull() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createBooking(
+                        customerId,
+                        professionalId,
+                        serviceId,
+                        null,
+                        LocalDateTime.now().plusDays(1)
+                )
+        );
+
+        verifyNoInteractions(bookingRepository);
+    }
+
+    @Test
+    void shouldRejectIfEndTimeIsNull() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createBooking(
+                        customerId,
+                        professionalId,
+                        serviceId,
+                        LocalDateTime.now().plusDays(1),
+                        null
                 )
         );
 
@@ -254,6 +289,137 @@ class CreateBookingServiceTest {
 
         assertEquals(BookingStatus.CONFIRMADA, result.getStatus());
         verify(bookingRepository).saveAndFlush(any(Booking.class));
+    }
+
+    @Test
+    void shouldTranslateOverlapConstraintViolationToSlotOccupied() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
+        doThrow(new DataIntegrityViolationException(
+                "booking_no_overlapping_confirmed"
+        )).when(bookingRepository).saveAndFlush(any(Booking.class));
+
+        BookingConflictException exception = assertThrows(
+                BookingConflictException.class,
+                () -> service.createBooking(
+                        customerId, professionalId, serviceId, startTime, endTime
+                )
+        );
+
+        assertEquals("SLOT_OCUPADO", exception.getErrorCode());
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void shouldTranslateUniqueConstraintViolationToSlotOccupied() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
+        doThrow(new DataIntegrityViolationException(
+                "duplicate booking",
+                new ConstraintViolationException(
+                        "duplicate booking",
+                        null,
+                        "unique_booking_per_professional_time"
+                )
+        )).when(bookingRepository).saveAndFlush(any(Booking.class));
+
+        BookingConflictException exception = assertThrows(
+                BookingConflictException.class,
+                () -> service.createBooking(
+                        customerId, professionalId, serviceId, startTime, endTime
+                )
+        );
+
+        assertEquals("SLOT_OCUPADO", exception.getErrorCode());
+    }
+
+    @Test
+    void shouldTranslateDeadlockToSlotOccupied() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
+        doThrow(new CannotAcquireLockException("deadlock detected"))
+                .when(bookingRepository).saveAndFlush(any(Booking.class));
+
+        BookingConflictException exception = assertThrows(
+                BookingConflictException.class,
+                () -> service.createBooking(
+                        customerId, professionalId, serviceId, startTime, endTime
+                )
+        );
+
+        assertEquals("SLOT_OCUPADO", exception.getErrorCode());
+    }
+
+    @Test
+    void shouldPropagateUnrelatedIntegrityViolation() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+        DataIntegrityViolationException original =
+                new DataIntegrityViolationException("foreign key violation");
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
+        doThrow(original).when(bookingRepository)
+                .saveAndFlush(any(Booking.class));
+
+        assertSame(
+                original,
+                assertThrows(
+                        DataIntegrityViolationException.class,
+                        () -> service.createBooking(
+                                customerId, professionalId, serviceId, startTime, endTime
+                        )
+                )
+        );
+    }
+
+    @Test
+    void shouldPropagateViolationFromAnotherConstraint() {
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime endTime = startTime.plusMinutes(45);
+        DataIntegrityViolationException original =
+                new DataIntegrityViolationException(
+                        "other constraint",
+                        new ConstraintViolationException(
+                                "other constraint",
+                                null,
+                                "other_constraint"
+                        )
+                );
+
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
+        doThrow(original).when(bookingRepository)
+                .saveAndFlush(any(Booking.class));
+
+        assertSame(
+                original,
+                assertThrows(
+                        DataIntegrityViolationException.class,
+                        () -> service.createBooking(
+                                customerId, professionalId, serviceId, startTime, endTime
+                        )
+                )
+        );
     }
 
     private void stubScheduleContaining(

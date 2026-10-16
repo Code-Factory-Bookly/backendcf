@@ -107,8 +107,10 @@ public class CancelBookingService {
                         )
                 );
 
-        // Solo el cliente propietario puede cancelar.
-        if (!authenticatedCustomerId.equals(booking.getCustomerId())) {
+        // ADMIN puede cancelar reservas de cualquier cliente. Los demás
+        // usuarios solo pueden cancelar sus propias reservas.
+        if (!isAdmin(authentication)
+                && !authenticatedCustomerId.equals(booking.getCustomerId())) {
             throw new AccessDeniedException(
                     "Solo el cliente propietario puede cancelar la reserva"
             );
@@ -165,5 +167,11 @@ public class CancelBookingService {
         eventPublisher.publish(event);
 
         return saved;
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority ->
+                        "ROLE_ADMIN".equals(authority.getAuthority()));
     }
 }

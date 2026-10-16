@@ -56,8 +56,10 @@ class BookingConcurrencyTest {
             CountDownLatch ready = new CountDownLatch(2);
             CountDownLatch go = new CountDownLatch(1);
             try {
-                Future<Object> first = executor.submit(() -> attempt(customerX, professional, service, start, end, ready, go));
-                Future<Object> second = executor.submit(() -> attempt(customerY, professional, service, start, end, ready, go));
+                Future<Object> first = executor.submit(() -> attempt(customerX, professional, service,
+                        start, end, ready, go));
+                Future<Object> second = executor.submit(() -> attempt(customerY, professional, service,
+                        start.plusMinutes(30), end.plusMinutes(30), ready, go));
                 assertTrue(ready.await(10, TimeUnit.SECONDS), "Both requests must be ready");
                 go.countDown();
                 Object resultX = first.get(30, TimeUnit.SECONDS);
@@ -67,7 +69,9 @@ class BookingConcurrencyTest {
                 long conflicts = java.util.stream.Stream.of(resultX, resultY).filter(BookingConflictException.class::isInstance).count();
                 assertEquals(1, successes, "Exactly one request must succeed: " + resultX + " / " + resultY);
                 assertEquals(1, conflicts, "Exactly one request must fail with BookingConflictException: " + resultX + " / " + resultY);
-                assertEquals(1L, jdbc.queryForObject("SELECT count(*) FROM bookings WHERE professional_id=? AND start_time=? AND end_time=? AND status='CONFIRMADA'", Long.class, professional, start, end));
+                assertEquals(1L, jdbc.queryForObject(
+                        "SELECT count(*) FROM bookings WHERE professional_id=? AND status='CONFIRMADA'",
+                        Long.class, professional));
             } finally {
                 go.countDown();
                 executor.shutdownNow();

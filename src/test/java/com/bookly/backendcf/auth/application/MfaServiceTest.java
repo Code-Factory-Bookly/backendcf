@@ -64,6 +64,7 @@ class MfaServiceTest {
         when(accounts.findById(admin.getId())).thenReturn(Optional.of(admin));
         when(accounts.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(recoveryCodes.save(any(MfaRecoveryCode.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(recoveryCodes.saveAllAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -132,6 +133,39 @@ class MfaServiceTest {
         ArgumentCaptor<List<MfaRecoveryCode>> persistedCodes = ArgumentCaptor.forClass(List.class);
         verify(recoveryCodes).saveAllAndFlush(persistedCodes.capture());
         assertEquals(10, persistedCodes.getValue().size());
+    }
+
+    @Test
+    void consultarCodigosRestantesDevuelveElConteoPersistido() {
+        MfaRecoveryCode first = new MfaRecoveryCode(admin.getId(), "hash-1", OffsetDateTime.now());
+        MfaRecoveryCode second = new MfaRecoveryCode(admin.getId(), "hash-2", OffsetDateTime.now());
+        when(recoveryCodes.findByUserIdAndUsedAtIsNull(admin.getId())).thenReturn(List.of(first, second));
+
+        assertEquals(2, service.recoveryCodesRemaining(admin.getId()));
+    }
+
+    @Test
+    void regenerarCodigosFallaSiLaPersistenciaNoDevuelveLosDiezCodigos() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+        when(recoveryCodes.saveAllAndFlush(any())).thenReturn(List.of());
+
+        assertThrows(IllegalStateException.class,
+                () -> service.regenerateRecoveryCodes(admin.getId(), currentCode(secret)));
+    }
+
+    @Test
+    void regenerarCodigosIgnoraDuplicadosYDevuelveDiezCodigosUnicos() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+        ReflectionTestUtils.setField(service, "random", new RecoveryCodeRandomWithDuplicate());
+
+        List<String> codes = service.regenerateRecoveryCodes(admin.getId(), currentCode(secret));
+
+        assertEquals(10, codes.size());
+        assertEquals(10, codes.stream().distinct().count());
     }
 
     @Test
@@ -205,6 +239,20 @@ class MfaServiceTest {
             return new DefaultCodeGenerator().generate(secret, Math.floorDiv(System.currentTimeMillis() / 1000L, 30L));
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
+        }
+    }
+
+    private static final class RecoveryCodeRandomWithDuplicate extends java.security.SecureRandom {
+        private int call;
+
+        @Override
+        public int nextInt(int bound) {
+            int codeIndex = call / 8;
+            int position = call++ % 8;
+            if (codeIndex == 0 || codeIndex == 1) {
+                return 0;
+            }
+            return position == 7 ? codeIndex - 1 : 0;
         }
     }
 }

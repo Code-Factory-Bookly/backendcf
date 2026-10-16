@@ -228,8 +228,10 @@ public class MfaService {
         List<MfaRecoveryCode> persistedCodes = rawCodes.stream()
                 .map(raw -> new MfaRecoveryCode(account.getId(), passwordEncoder.encode(raw), now))
                 .toList();
-        recoveryCodes.saveAllAndFlush(persistedCodes);
-        if (plainCodes.size() != RECOVERY_CODE_COUNT || persistedCodes.size() != RECOVERY_CODE_COUNT) {
+        List<MfaRecoveryCode> savedCodes = recoveryCodes.saveAllAndFlush(persistedCodes);
+        if (plainCodes.size() != RECOVERY_CODE_COUNT
+                || savedCodes == null
+                || savedCodes.size() != RECOVERY_CODE_COUNT) {
             throw new IllegalStateException("No se pudieron generar exactamente 10 códigos de recuperación");
         }
         return List.copyOf(plainCodes);

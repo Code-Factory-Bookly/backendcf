@@ -112,12 +112,12 @@ public class SecurityConfiguration {
                                 "/api/v1/horarios/**"
                         ).hasAnyRole("PROFESSIONAL", "ADMIN")
 
-                        // HU-09: solo clientes autenticados
+                        // HU-09: clientes y administradores autenticados
                         // pueden solicitar cancelaciones.
                         .requestMatchers(
                                 HttpMethod.PATCH,
                                 "/api/v1/reservas/*/cancelacion"
-                        ).hasRole("CUSTOMER")
+                        ).hasAnyRole("CUSTOMER", "ADMIN")
                         // Disponibilidad de agenda: acción del cliente (HU-07)
                         .requestMatchers(
                                 HttpMethod.GET, "/api/v1/disponibilidad"

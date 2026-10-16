@@ -62,20 +62,39 @@ class CancelBookingSecurityTest {
     }
 
     @Test
-    void administradorNoPuedeCancelarDevuelve403() throws Exception {
+    void administradorPuedeAccederAlEndpoint() throws Exception {
         String adminToken = tokenFor(UserRole.ADMIN);
         UUID bookingId = UUID.randomUUID();
+        Booking booking = new Booking(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                LocalDateTime.now().plusDays(3),
+                LocalDateTime.now().plusDays(3).plusHours(1)
+        );
+        ReflectionTestUtils.setField(booking, "id", bookingId);
+        booking.setStatus(BookingStatus.CANCELADA);
+        booking.setCancelledAt(LocalDateTime.now());
+
+        when(cancelBookingService.cancelBooking(
+                eq(bookingId), any(), isNull()
+        )).thenReturn(booking);
 
         mockMvc.perform(
                         patch(ENDPOINT, bookingId)
                                 .header("Authorization", "Bearer " + adminToken)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"reason\":\"Cambio de planes\"}")
                 )
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bookingId").value(bookingId.toString()));
 
-        verifyNoInteractions(cancelBookingService);
+        verify(cancelBookingService).cancelBooking(
+                eq(bookingId),
+                argThat(authentication -> authentication.getAuthorities().stream()
+                        .anyMatch(authority ->
+                                "ROLE_ADMIN".equals(authority.getAuthority()))),
+                isNull()
+        );
     }
 
     @Test

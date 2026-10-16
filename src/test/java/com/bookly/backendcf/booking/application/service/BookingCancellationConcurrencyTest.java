@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -97,6 +98,20 @@ class BookingCancellationConcurrencyTest {
                             "(id, rol, especialidad, created_at, updated_at) " +
                             "VALUES (?, 'PROFESSIONAL', 'General', ?, ?)",
                     professionalId,
+                    now,
+                    now
+            );
+
+            jdbc.update(
+                    "INSERT INTO horario_semanal " +
+                            "(id, profesional_id, dia_semana, hora_inicio, " +
+                            "hora_fin, created_at, updated_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    UUID.randomUUID(),
+                    professionalId,
+                    start.getDayOfWeek().name(),
+                    LocalTime.of(8, 0),
+                    LocalTime.of(18, 0),
                     now,
                     now
             );
@@ -258,6 +273,11 @@ class BookingCancellationConcurrencyTest {
             //base de pruebas (solo para)
             jdbc.update(
                     "DELETE FROM bookings WHERE professional_id = ?",
+                    professionalId
+            );
+
+            jdbc.update(
+                    "DELETE FROM horario_semanal WHERE profesional_id = ?",
                     professionalId
             );
 

@@ -15,6 +15,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -92,6 +93,20 @@ class BookingCancellationIntegrationTest {
                             "(id, rol, especialidad, created_at, updated_at) " +
                             "VALUES (?, 'PROFESSIONAL', 'General', ?, ?)",
                     professional, now, now
+            );
+
+            jdbc.update(
+                    "INSERT INTO horario_semanal " +
+                            "(id, profesional_id, dia_semana, hora_inicio, " +
+                            "hora_fin, created_at, updated_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    UUID.randomUUID(),
+                    professional,
+                    start.getDayOfWeek().name(),
+                    LocalTime.of(8, 0),
+                    LocalTime.of(18, 0),
+                    now,
+                    now
             );
 
             jdbc.update(
@@ -211,6 +226,11 @@ class BookingCancellationIntegrationTest {
             // Limpiar exclusivamente los datos de esta prueba.
             jdbc.update(
                     "DELETE FROM bookings WHERE professional_id = ?",
+                    professional
+            );
+
+            jdbc.update(
+                    "DELETE FROM horario_semanal WHERE profesional_id = ?",
                     professional
             );
 

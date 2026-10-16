@@ -7,6 +7,7 @@ import com.bookly.backendcf.booking.domain.model.Booking;
 import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
+import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -28,13 +29,16 @@ public class CreateBookingService {
 
     private final BookingRepository bookingRepository;
     private final BookingEventPublisher eventPublisher;
+    private final WeeklySlotRepository weeklySlotRepository;
 
     public CreateBookingService(
             BookingRepository bookingRepository,
-            BookingEventPublisher eventPublisher
+            BookingEventPublisher eventPublisher,
+            WeeklySlotRepository weeklySlotRepository
     ) {
         this.bookingRepository = bookingRepository;
         this.eventPublisher = eventPublisher;
+        this.weeklySlotRepository = weeklySlotRepository;
     }
 
     @Transactional
@@ -48,6 +52,11 @@ public class CreateBookingService {
 
         validateTimeRange(startTime, endTime);
         validateFutureTime(startTime);
+        validateWithinProfessionalSchedule(
+                professionalId,
+                startTime,
+                endTime
+        );
 
         List<Booking> overlapping =
                 bookingRepository.findOverlappingBookings(
@@ -172,6 +181,33 @@ public class CreateBookingService {
         if (startTime.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException(
                     "No puedes agendar en el pasado"
+            );
+        }
+    }
+
+    private void validateWithinProfessionalSchedule(
+            UUID professionalId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        boolean containedInSchedule = startTime.toLocalDate()
+                .equals(endTime.toLocalDate())
+                && weeklySlotRepository
+                .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
+                        professionalId
+                )
+                .stream()
+                .filter(slot -> slot.getDayOfWeek()
+                        .equals(startTime.getDayOfWeek()))
+                .anyMatch(slot -> !startTime.toLocalTime()
+                        .isBefore(slot.getStartTime())
+                        && !endTime.toLocalTime()
+                        .isAfter(slot.getEndTime()));
+
+        if (!containedInSchedule) {
+            throw new BookingConflictException(
+                    "SLOT_OUTSIDE_SCHEDULE",
+                    "El horario seleccionado está fuera de la disponibilidad del profesional"
             );
         }
     }

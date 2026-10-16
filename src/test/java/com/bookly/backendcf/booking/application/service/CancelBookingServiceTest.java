@@ -196,6 +196,32 @@ class CancelBookingServiceTest {
     }
 
     @Test
+    void shouldAllowCancellationByAdminOfAnotherCustomer() {
+        Authentication adminAuthentication =
+                new UsernamePasswordAuthenticationToken(
+                        UUID.randomUUID().toString(),
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                );
+
+        when(bookingRepository.findByIdForUpdate(bookingId))
+                .thenReturn(Optional.of(booking));
+        booking.setStatus(BookingStatus.CONFIRMADA);
+        when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
+
+        Booking result = service.cancelBooking(
+                bookingId,
+                adminAuthentication,
+                "Intervencion administrativa"
+        );
+
+        assertEquals(BookingStatus.CANCELADA, result.getStatus());
+        verify(ownershipGuard).check(booking.getCustomerId(), adminAuthentication);
+        verify(bookingRepository).saveAndFlush(booking);
+        verify(eventPublisher).publish(any(BookingCancelledEvent.class));
+    }
+
+    @Test
     void shouldRejectAlreadyCancelledBooking() {
         booking.setStatus(BookingStatus.CANCELADA);
 

@@ -1,10 +1,12 @@
 
 package com.bookly.backendcf.shared.error;
 
+import com.bookly.backendcf.auth.application.DisposableEmailDomainException;
 import com.bookly.backendcf.auth.application.EmailAlreadyRegisteredException;
 import com.bookly.backendcf.auth.application.InvalidCredentialsException;
 import com.bookly.backendcf.auth.application.InvalidMfaCodeException;
 import com.bookly.backendcf.auth.application.InvalidMfaTokenException;
+import com.bookly.backendcf.auth.application.TooManyLoginAttemptsException;
 import com.bookly.backendcf.audit.application.InvalidAuditQueryException;
 import com.bookly.backendcf.availability.application.InvalidAvailabilityQueryException;
 import com.bookly.backendcf.platform.application.PlatformAlreadyConfiguredException;
@@ -92,6 +94,18 @@ public class GlobalExceptionHandler {
                 exception.getDetails());
     }
 
+    @ExceptionHandler(DisposableEmailDomainException.class)
+    public ResponseEntity<ApiErrorResponse> handleDisposableEmailDomain(
+            DisposableEmailDomainException exception
+    ) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "DISPOSABLE_EMAIL_DOMAIN",
+                exception.getMessage(),
+                Map.of("email", "No se permiten correos de dominios desechables o temporales")
+        );
+    }
+
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ResponseEntity<ApiErrorResponse> handleDuplicateEmail(
             EmailAlreadyRegisteredException exception
@@ -138,6 +152,18 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.UNAUTHORIZED,
                 "INVALID_MFA_CODE",
+                exception.getMessage(),
+                Map.of()
+        );
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ResponseEntity<ApiErrorResponse> handleTooManyLoginAttempts(
+            TooManyLoginAttemptsException exception
+    ) {
+        return buildResponse(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "TOO_MANY_ATTEMPTS",
                 exception.getMessage(),
                 Map.of()
         );

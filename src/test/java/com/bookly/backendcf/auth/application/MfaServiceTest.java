@@ -84,10 +84,40 @@ class MfaServiceTest {
 
     @Test
     void noSePuedeReenrolarConSoloLaContrasena() {
+        String secret = new DefaultSecretGenerator().generate();
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
         admin.confirmMfaEnrollment(OffsetDateTime.now());
         String mfaToken = tokens.createMfaPendingToken(admin);
 
         assertThrows(InvalidMfaTokenException.class, () -> service.startEnrollment(mfaToken));
+    }
+
+    @Test
+    void despuesDeDesactivarMfaSePuedeVolverAConfigurar() {
+        String rawPassword = "Valid1!pass";
+        String secret = new DefaultSecretGenerator().generate();
+        admin.updatePassword(new BCryptPasswordEncoder().encode(rawPassword), OffsetDateTime.now());
+        admin.beginMfaEnrollment(cipher.encrypt(secret), OffsetDateTime.now());
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+
+        service.disable(admin.getId(), rawPassword, currentCode(secret));
+
+        MfaService.Enrollment enrollment = service.startEnrollment(
+                tokens.createMfaPendingToken(admin));
+
+        assertFalse(admin.isMfaEnabled());
+        assertTrue(enrollment.secret() != null && !enrollment.secret().isBlank());
+        assertTrue(enrollment.otpauthUri().startsWith("otpauth://totp/Bookly:"));
+    }
+
+    @Test
+    void permiteRecuperarUnEstadoActivoSinSecreto() {
+        admin.confirmMfaEnrollment(OffsetDateTime.now());
+
+        MfaService.Enrollment enrollment = service.startEnrollment(
+                tokens.createMfaPendingToken(admin));
+
+        assertTrue(enrollment.secret() != null && !enrollment.secret().isBlank());
     }
 
     @Test

@@ -135,6 +135,10 @@ public class UserAccount {
         return mfaEnabled;
     }
 
+    public boolean isMfaConfigured() {
+        return mfaEnabled && mfaSecretEncrypted != null;
+    }
+
     public String getMfaSecretEncrypted() {
         return mfaSecretEncrypted;
     }

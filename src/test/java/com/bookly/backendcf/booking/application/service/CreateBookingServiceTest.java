@@ -7,6 +7,8 @@ import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.domain.events.BookingCreatedEvent;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
+import com.bookly.backendcf.schedule.domain.model.WeeklySlot;
+import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +20,9 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,6 +38,9 @@ class CreateBookingServiceTest {
     @Mock
     private BookingEventPublisher eventPublisher;
 
+    @Mock
+    private WeeklySlotRepository weeklySlotRepository;
+
     private CreateBookingService service;
     private UUID customerId;
     private UUID professionalId;
@@ -43,7 +50,8 @@ class CreateBookingServiceTest {
     void setUp() {
         service = new CreateBookingService(
                 bookingRepository,
-                eventPublisher
+                eventPublisher,
+                weeklySlotRepository
         );
 
         customerId = UUID.randomUUID();
@@ -61,6 +69,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
 
         Booking mockBooking = new Booking(
                 customerId,
@@ -190,6 +199,7 @@ class CreateBookingServiceTest {
         )).thenReturn(
                 Collections.singletonList(existingBooking)
         );
+        stubScheduleContaining(startTime, endTime);
 
         assertThrows(
                 BookingConflictException.class,
@@ -209,6 +219,79 @@ class CreateBookingServiceTest {
     }
 
     @Test
+    void shouldRejectBookingOutsideProfessionalSchedule() {
+        LocalDateTime startTime = LocalDateTime.now()
+                .plusDays(1)
+                .withHour(15)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+        LocalDateTime endTime = startTime.plusHours(1);
+
+        when(weeklySlotRepository
+                .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
+                        professionalId
+                ))
+                .thenReturn(List.of(new WeeklySlot(
+                        professionalId,
+                        startTime.getDayOfWeek(),
+                        LocalTime.of(9, 0),
+                        LocalTime.of(12, 0)
+                )));
+
+        BookingConflictException exception = assertThrows(
+                BookingConflictException.class,
+                () -> service.createBooking(
+                        customerId,
+                        professionalId,
+                        serviceId,
+                        startTime,
+                        endTime
+                )
+        );
+
+        assertEquals("SLOT_OUTSIDE_SCHEDULE", exception.getErrorCode());
+        verifyNoInteractions(bookingRepository, eventPublisher);
+    }
+
+    @Test
+    void shouldAcceptBookingContainedInProfessionalSchedule() {
+        LocalDateTime startTime = LocalDateTime.now()
+                .plusDays(1)
+                .withHour(10)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+        LocalDateTime endTime = startTime.plusHours(1);
+
+        stubScheduleContaining(startTime, endTime);
+        when(bookingRepository.findOverlappingBookings(
+                professionalId, startTime, endTime
+        )).thenReturn(Collections.emptyList());
+
+        Booking savedBooking = new Booking(
+                customerId,
+                professionalId,
+                serviceId,
+                startTime,
+                endTime
+        );
+        when(bookingRepository.saveAndFlush(any(Booking.class)))
+                .thenReturn(savedBooking);
+
+        Booking result = service.createBooking(
+                customerId,
+                professionalId,
+                serviceId,
+                startTime,
+                endTime
+        );
+
+        assertEquals(BookingStatus.CONFIRMADA, result.getStatus());
+        verify(bookingRepository).saveAndFlush(any(Booking.class));
+    }
+
+    @Test
     void shouldTranslateOverlapConstraintViolationToSlotOccupied() {
         LocalDateTime startTime = LocalDateTime.now().plusDays(1);
         LocalDateTime endTime = startTime.plusMinutes(45);
@@ -216,6 +299,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
         doThrow(new DataIntegrityViolationException(
                 "booking_no_overlapping_confirmed"
         )).when(bookingRepository).saveAndFlush(any(Booking.class));
@@ -239,6 +323,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
         doThrow(new DataIntegrityViolationException(
                 "duplicate booking",
                 new ConstraintViolationException(
@@ -266,6 +351,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
         doThrow(new CannotAcquireLockException("deadlock detected"))
                 .when(bookingRepository).saveAndFlush(any(Booking.class));
 
@@ -289,6 +375,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
         doThrow(original).when(bookingRepository)
                 .saveAndFlush(any(Booking.class));
 
@@ -320,6 +407,7 @@ class CreateBookingServiceTest {
         when(bookingRepository.findOverlappingBookings(
                 professionalId, startTime, endTime
         )).thenReturn(Collections.emptyList());
+        stubScheduleContaining(startTime, endTime);
         doThrow(original).when(bookingRepository)
                 .saveAndFlush(any(Booking.class));
 
@@ -332,5 +420,21 @@ class CreateBookingServiceTest {
                         )
                 )
         );
+    }
+
+    private void stubScheduleContaining(
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        when(weeklySlotRepository
+                .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
+                        professionalId
+                ))
+                .thenReturn(List.of(new WeeklySlot(
+                        professionalId,
+                        startTime.getDayOfWeek(),
+                        startTime.toLocalTime().minusHours(1),
+                        endTime.toLocalTime().plusHours(1)
+                )));
     }
 }

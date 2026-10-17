@@ -11,6 +11,7 @@ import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -48,6 +49,7 @@ class BookingConcurrencyTest {
             insertUser(customerY, "customer-y-" + suffix + "@example.test", "CUSTOMER", now);
             insertUser(professional, "professional-" + suffix + "@example.test", "PROFESSIONAL", now);
             jdbc.update("INSERT INTO profesionales (id, rol, especialidad, created_at, updated_at) VALUES (?, 'PROFESSIONAL', 'General', ?, ?)", professional, now, now);
+            jdbc.update("INSERT INTO horario_semanal (id, profesional_id, dia_semana, hora_inicio, hora_fin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", UUID.randomUUID(), professional, start.getDayOfWeek().name(), LocalTime.of(8, 0), LocalTime.of(18, 0), now, now);
             jdbc.update("INSERT INTO servicios (id, nombre, categoria, duracion_minutos, precio, estado, created_at, updated_at) VALUES (?, ?, 'General', 60, ?, 'ACTIVO', ?, ?)", service, "Test concurrency " + suffix, new BigDecimal("100.00"), now, now);
 
             ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -76,6 +78,7 @@ class BookingConcurrencyTest {
             }
         } finally {
             jdbc.update("DELETE FROM bookings WHERE professional_id=?", professional);
+            jdbc.update("DELETE FROM horario_semanal WHERE profesional_id=?", professional);
             jdbc.update("DELETE FROM profesionales WHERE id=?", professional);
             jdbc.update("DELETE FROM servicios WHERE id=?", service);
             // audit_log es append-only y conserva la FK de los actores auditados; por eso

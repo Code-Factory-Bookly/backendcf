@@ -8,6 +8,8 @@ import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingRequest;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingResponse;
+import com.bookly.backendcf.schedule.domain.model.WeeklySlot;
+import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,11 +37,18 @@ class BookingAdditionalCoverageTests {
     @Mock
     private BookingEventPublisher eventPublisher;
 
+    @Mock
+    private WeeklySlotRepository weeklySlotRepository;
+
     private CreateBookingService service;
 
     @BeforeEach
     void setUp() {
-        service = new CreateBookingService(bookingRepository, eventPublisher);
+        service = new CreateBookingService(
+                bookingRepository,
+                eventPublisher,
+                weeklySlotRepository
+        );
     }
 
     // CreateBookingRequest extensive tests
@@ -325,6 +334,8 @@ class BookingAdditionalCoverageTests {
         LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime end = start.plusHours(1);
 
+        stubScheduleContaining(start, end, profId);
+
         Booking b1 = new Booking(custId, profId, svcId, start, end);
         Booking b2 = new Booking(custId, profId, svcId, start.plusMinutes(30), end.plusMinutes(30));
 
@@ -343,6 +354,8 @@ class BookingAdditionalCoverageTests {
         UUID svcId = UUID.randomUUID();
         LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime end = start.plusHours(1);
+
+        stubScheduleContaining(start, end, profId);
 
         when(bookingRepository.findOverlappingBookings(profId, start, end))
                 .thenReturn(Collections.emptyList());
@@ -363,6 +376,8 @@ class BookingAdditionalCoverageTests {
         LocalDateTime start = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
         LocalDateTime end = start.plusHours(1);
 
+        stubScheduleContaining(start, end, profId);
+
         when(bookingRepository.findOverlappingBookings(profId, start, end))
                 .thenReturn(Collections.emptyList());
 
@@ -372,6 +387,23 @@ class BookingAdditionalCoverageTests {
         service.createBooking(custId, profId, svcId, start, end);
 
         verify(bookingRepository, times(1)).saveAndFlush(any(Booking.class));
+    }
+
+    private void stubScheduleContaining(
+            LocalDateTime start,
+            LocalDateTime end,
+            UUID professionalId
+    ) {
+        when(weeklySlotRepository
+                .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
+                        professionalId
+                ))
+                .thenReturn(List.of(new WeeklySlot(
+                        professionalId,
+                        start.getDayOfWeek(),
+                        start.toLocalTime().minusHours(1),
+                        end.toLocalTime().plusHours(1)
+                )));
     }
 
     @Test

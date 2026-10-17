@@ -74,15 +74,17 @@ public class RoleAssignmentService {
     }
 
     // Busqueda por correo o nombre para la asignacion de roles: evita que el admin tenga que
-    // conocer el UUID del usuario de antemano. Sin texto (o un solo caracter) se muestran algunos
-    // usuarios existentes a modo de sugerencia, nunca la tabla completa, para no pagar el costo de
-    // traer todos los usuarios en cada apertura de la pantalla.
+    // conocer el UUID del usuario de antemano. Las consultas demasiado cortas no se ejecutan para
+    // evitar exponer usuarios sin un criterio de busqueda concreto.
     @Transactional(readOnly = true)
     public List<UserSearchResult> search(String query) {
         String trimmed = query == null ? "" : query.trim();
-        List<UserAccount> matches = trimmed.length() < 2
-                ? userAccountRepository.findTop10ByOrderByFullNameAsc()
-                : userAccountRepository.findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(
+        if (trimmed.length() < 2) {
+            return List.of();
+        }
+
+        List<UserAccount> matches = userAccountRepository
+                .findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(
                         trimmed, trimmed);
         return matches.stream()
                 .map(account -> UserSearchResult.of(account, professionalRepository.existsById(account.getId())))

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bookly.backendcf.auth.domain.events.RoleChangedEvent;
@@ -100,18 +101,11 @@ class RoleAssignmentServiceTest {
     }
 
     @Test
-    void busquedaSinTextoDevuelveSugerenciasExistentes() {
-        UserAccount existing = new UserAccount("sugerido@example.com", "hash", "Sugerido Uno", UserRole.CUSTOMER);
-        when(userRepository.findTop10ByOrderByFullNameAsc()).thenReturn(List.of(existing));
-        when(professionalRepository.existsById(existing.getId())).thenReturn(false);
-
+    void busquedaSinTextoNoExponeUsuarios() {
         List<UserSearchResult> results = service.search(" ");
 
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).email()).isEqualTo("sugerido@example.com");
-        assertThat(results.get(0).hasProfessionalProfile()).isFalse();
-        verify(userRepository, never())
-                .findTop10ByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCaseOrderByFullNameAsc(any(), any());
+        assertThat(results).isEmpty();
+        verifyNoInteractions(userRepository, professionalRepository);
     }
 
     @Test
@@ -130,13 +124,11 @@ class RoleAssignmentServiceTest {
     }
 
     @Test
-    void busquedaConUnSoloCaracterSeTrataComoSinTexto() {
-        when(userRepository.findTop10ByOrderByFullNameAsc()).thenReturn(List.of());
-
+    void busquedaConUnSoloCaracterNoExponeUsuarios() {
         List<UserSearchResult> results = service.search("a");
 
         assertThat(results).isEmpty();
-        verify(userRepository).findTop10ByOrderByFullNameAsc();
+        verifyNoInteractions(userRepository, professionalRepository);
     }
 
     private void givenUser(UserRole role) {

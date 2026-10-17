@@ -12,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -45,7 +44,7 @@ class CancelBookingErrorResponseTest {
     private CancelBookingService cancelBookingService;
 
     @Test
-    void anotherCustomerReceives403WithStandardError() throws Exception {
+    void anotherCustomerReceives404WithStandardError() throws Exception {
         UUID bookingId = UUID.randomUUID();
         String token = customerToken();
 
@@ -53,18 +52,19 @@ class CancelBookingErrorResponseTest {
                 eq(bookingId),
                 any(Authentication.class),
                 isNull()
-        )).thenThrow(new AccessDeniedException(
-                "Solo el cliente propietario puede cancelar la reserva"
+        )).thenThrow(new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Reserva no encontrada"
         ));
 
         mockMvc.perform(
                         patch(ENDPOINT, bookingId)
                                 .header("Authorization", "Bearer " + token)
                 )
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value(
-                        "Solo el cliente propietario puede cancelar la reserva"
+                        "Reserva no encontrada"
                 ))
                 .andExpect(jsonPath("$.details").isMap())
                 .andExpect(jsonPath("$.traceId").isNotEmpty())

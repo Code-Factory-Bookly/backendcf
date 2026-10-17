@@ -2,10 +2,10 @@ package com.bookly.backendcf.audit.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bookly.backendcf.audit.domain.model.AuditAction;
@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -64,13 +65,41 @@ class AuditQueryServiceTest {
     }
 
     @Test
-    void rechazaUnRangoSinFechas() {
-        assertThatThrownBy(() -> service.find(null, OffsetDateTime.now(), 0, 50))
-                .isInstanceOf(InvalidAuditQueryException.class)
-                .hasMessage("El rango de fechas es obligatorio")
-                .satisfies(exception -> assertThat(((InvalidAuditQueryException) exception).getDetails())
-                        .containsEntry("from", "Es obligatorio"));
-        verifyNoInteractions(auditLogQuery);
+    void usaLasUltimas24HorasCuandoNoSeEspecificanFechas() {
+        when(auditLogQuery.findByOccurredAtBetween(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        OffsetDateTime before = OffsetDateTime.now().minusDays(1);
+        service.find(null, null, 0, 50);
+        OffsetDateTime after = OffsetDateTime.now();
+
+        ArgumentCaptor<OffsetDateTime> fromCaptor = ArgumentCaptor.forClass(OffsetDateTime.class);
+        ArgumentCaptor<OffsetDateTime> toCaptor = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(auditLogQuery).findByOccurredAtBetween(fromCaptor.capture(), toCaptor.capture(), any());
+        assertThat(fromCaptor.getValue()).isBetween(before.minusSeconds(1), after.minusDays(1).plusSeconds(1));
+        assertThat(toCaptor.getValue()).isBetween(before.plusDays(1).minusSeconds(1), after.plusSeconds(1));
+    }
+
+    @Test
+    void completaElFinCuandoSoloSeEspecificaElInicio() {
+        OffsetDateTime from = OffsetDateTime.parse("2026-10-08T00:00:00Z");
+        when(auditLogQuery.findByOccurredAtBetween(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.find(from, null, 0, 50);
+
+        verify(auditLogQuery).findByOccurredAtBetween(eq(from), any(), any());
+    }
+
+    @Test
+    void completaElInicioCuandoSoloSeEspecificaElFin() {
+        OffsetDateTime to = OffsetDateTime.parse("2026-10-08T00:00:00Z");
+        when(auditLogQuery.findByOccurredAtBetween(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.find(null, to, 0, 50);
+
+        verify(auditLogQuery).findByOccurredAtBetween(any(), eq(to), any());
     }
 
     @Test

@@ -145,4 +145,57 @@ class SonarCloudMetricsCollectorParseTest {
         assertThat(m.req2DeudaTecnica().estado()).isEqualTo(QualityMetrics.Estado.PASS);
         assertThat(m.req2DeudaTecnica().valor()).contains("0");
     }
+
+    @Test
+    @DisplayName("parse() con JSON que tiene line_coverage pero no coverage")
+    void parseSinGlobalCoverage() {
+        String qg = "{\"projectStatus\":{\"alertStatus\":\"OK\"}}";
+        String measures = "[{\"metric\":\"line_coverage\",\"value\":\"93.9\"}," +
+                "{\"metric\":\"branch_coverage\",\"value\":\"80.4\"}]";
+        QualityMetrics m = collector.parse(qg, measures, "{\"issues\":[]}");
+
+        // Sin coverage global: globalCov=0 → DESCONOCIDO
+        assertThat(m.req1Cobertura().estado()).isEqualTo(QualityMetrics.Estado.DESCONOCIDO);
+        // Pero line_coverage y branch_coverage se muestran
+        assertThat(m.req1Cobertura().valor()).contains("93.9");
+    }
+
+    @Test
+    @DisplayName("parse() cuenta 0 vulnerabilidades cuando issues es array vacio")
+    void parseIssuesVacio() {
+        String qg = "{\"projectStatus\":{\"alertStatus\":\"OK\"}}";
+        QualityMetrics m = collector.parse(qg, "[]", "{\"issues\":[]}");
+
+        assertThat(m.req5Vulnerabilidades().estado()).isEqualTo(QualityMetrics.Estado.PASS);
+        assertThat(m.req5Vulnerabilidades().valor()).contains("0");
+    }
+
+    @Test
+    @DisplayName("parse() maneja issues sin severity CRITICAL (solo MAJOR)")
+    void parseSoloMajor() {
+        String qg = "{\"projectStatus\":{\"alertStatus\":\"OK\"}}";
+        String issues = "{\"issues\":[" +
+                "{\"severity\":\"MAJOR\",\"message\":\"a\"}," +
+                "{\"severity\":\"MAJOR\",\"message\":\"b\"}," +
+                "{\"severity\":\"MAJOR\",\"message\":\"c\"}" +
+                "]}";
+        QualityMetrics m = collector.parse(qg, "[]", issues);
+
+        // Sin CRITICAL = 0 criticas → PASS
+        assertThat(m.req5Vulnerabilidades().estado()).isEqualTo(QualityMetrics.Estado.PASS);
+    }
+
+    @Test
+    @DisplayName("parse() maneja issues sin el campo severity")
+    void parseIssuesSinSeverity() {
+        String qg = "{\"projectStatus\":{\"alertStatus\":\"OK\"}}";
+        String issues = "{\"issues\":[" +
+                "{\"message\":\"a\"}," +
+                "{\"message\":\"b\"}" +
+                "]}";
+        QualityMetrics m = collector.parse(qg, "[]", issues);
+
+        // Sin severity CRITICAL → 0
+        assertThat(m.req5Vulnerabilidades().estado()).isEqualTo(QualityMetrics.Estado.PASS);
+    }
 }

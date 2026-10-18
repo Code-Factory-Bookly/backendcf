@@ -43,14 +43,33 @@ public class QualityMetricsReporter implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(QualityMetricsReporter.class);
 
-    private final SonarCloudMetricsCollector sonar;
-    private final JacocoMetricsCollector jacoco;
-    private final CachedMetricsCollector cached;
+    private final QualityMetricsCollector sonar;
+    private final QualityMetricsCollector jacoco;
+    private final QualityMetricsCollector cached;
 
+    /**
+     * Constructor principal usado por Spring (que inyecta las
+     * implementaciones concretas via @Component).
+     */
+    @org.springframework.beans.factory.annotation.Autowired
     public QualityMetricsReporter(
             SonarCloudMetricsCollector sonar,
             JacocoMetricsCollector jacoco,
             CachedMetricsCollector cached
+    ) {
+        this.sonar = sonar;
+        this.jacoco = jacoco;
+        this.cached = cached;
+    }
+
+    /**
+     * Constructor alternativo que acepta la interfaz, util para
+     * tests unitarios con stubs o dobles de prueba.
+     */
+    public QualityMetricsReporter(
+            QualityMetricsCollector sonar,
+            QualityMetricsCollector jacoco,
+            QualityMetricsCollector cached
     ) {
         this.sonar = sonar;
         this.jacoco = jacoco;

@@ -86,40 +86,47 @@ public class QualityMetricsReporter implements ApplicationRunner {
         String border = repeat("=", width);
         String sep = repeat("-", width);
 
-        log.info("");
-        log.info(border);
-        log.info("  CALIDAD DEL PROYECTO - SPRINT 2 / #3 (requisitos exigidos)");
-        log.info(border);
-        log.info("");
-        log.info("  Fuente principal : {}", metrics.fuentePrincipal());
-        log.info("  Timestamp        : {}", metrics.timestamp());
-        log.info("");
-        log.info("  #   REQUISITO                                          VALOR                              UMBRAL        ESTADO");
-        log.info("  {}", sep);
-        log.info(formatRow(metrics.req1Cobertura()));
-        log.info(formatRow(metrics.req2DeudaTecnica()));
-        log.info(formatRow(metrics.req3Complejidad()));
-        log.info(formatRow(metrics.req4Severidad()));
-        log.info(formatRow(metrics.req5Vulnerabilidades()));
-        log.info("  {}", sep);
-        log.info("");
+        // Se imprime directo a System.out (no via log.info) para evitar que
+        // Spring Boot le meta timestamp + thread + logger name a cada linea.
+        // Asi el reporte queda limpio al final de la consola, identico a
+        // cualquier banner ASCII que ponen frameworks como Spring Boot.
+        java.io.PrintStream out = System.out;
+
+        out.println();
+        out.println(border);
+        out.println("  CALIDAD DEL PROYECTO - SPRINT 2 / #3 (requisitos exigidos)");
+        out.println(border);
+        out.println();
+        out.println("  Fuente principal : " + metrics.fuentePrincipal());
+        out.println("  Timestamp        : " + metrics.timestamp());
+        out.println();
+        out.println("  #   REQUISITO                                          VALOR                              UMBRAL        ESTADO");
+        out.println("  " + sep);
+        out.println(formatRow(metrics.req1Cobertura()));
+        out.println(formatRow(metrics.req2DeudaTecnica()));
+        out.println(formatRow(metrics.req3Complejidad()));
+        out.println(formatRow(metrics.req4Severidad()));
+        out.println(formatRow(metrics.req5Vulnerabilidades()));
+        out.println("  " + sep);
+        out.println();
 
         long pass = metrics.cantidadPass();
         long fail = metrics.cantidadFail();
         String verdict = metrics.todosPasan() ? "OK" : (fail > 0 ? "FALLA" : "PARCIAL");
-        log.info("  Resumen: {} / 5 requisitos pasan  |  {}", pass, verdict);
-        log.info("");
+        out.println("  Resumen: " + pass + " / 5 requisitos pasan  |  " + verdict);
+        out.println();
 
         if (!metrics.todosPasan()) {
-            log.warn("  Hay requisitos que NO cumplen. Sugerencias:");
-            log.warn("    - Cobertura: correr 'mvn test' antes de arrancar (genera target/site/jacoco/jacoco.csv)");
-            log.warn("    - Deuda/Vulnerabilidades: configurar SONAR_TOKEN y correr 'mvn sonar:sonar'");
-            log.warn("    - Cache local: ver docs/QUALITY-STATUS.md");
+            out.println("  Sugerencias para mejorar el reporte:");
+            out.println("    - Cobertura: correr 'mvn test' antes de arrancar (genera target/site/jacoco/jacoco.csv)");
+            out.println("    - Deuda/Vulnerabilidades: configurar SONAR_TOKEN y correr 'mvn sonar:sonar'");
+            out.println("    - Cache local: ver docs/QUALITY-STATUS.md");
         } else {
-            log.info("  Todos los requisitos del Sprint 2/#3 estan en verde.");
+            out.println("  Todos los requisitos del Sprint 2/#3 estan en verde.");
         }
-        log.info(border);
-        log.info("");
+        out.println(border);
+        out.println();
+        out.flush();
     }
 
     private String formatRow(QualityMetrics.Requisito r) {

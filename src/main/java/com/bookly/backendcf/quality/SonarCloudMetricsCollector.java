@@ -99,7 +99,8 @@ public class SonarCloudMetricsCollector implements QualityMetricsCollector {
      * Parseo minimo del JSON de SonarCloud. Usamos una lib minima propia
      * (en lugar de Jackson) para no agregar dependencias al main.
      */
-    private QualityMetrics parse(String qgJson, String measuresJson, String issuesJson) {
+    // package-private para tests
+    QualityMetrics parse(String qgJson, String measuresJson, String issuesJson) {
         // #1 Cobertura
         double lineCov = extractDouble(measuresJson, "\"line_coverage\"", "value", 0.0);
         double branchCov = extractDouble(measuresJson, "\"branch_coverage\"", "value", 0.0);
@@ -109,7 +110,8 @@ public class SonarCloudMetricsCollector implements QualityMetricsCollector {
                 : (globalCov > 0 ? QualityMetrics.Estado.FAIL : QualityMetrics.Estado.DESCONOCIDO);
         QualityMetrics.Requisito r1 = new QualityMetrics.Requisito(
                 1, "Cobertura de pruebas unitarias >= 65%",
-                String.format("%.1f%% (lineas %.1f%%, branches %.1f%%)", globalCov, lineCov, branchCov),
+                String.format(java.util.Locale.ROOT, "%.1f%% (lineas %.1f%%, branches %.1f%%)",
+                        globalCov, lineCov, branchCov),
                 ">= 65%",
                 e1,
                 "SonarCloud API"

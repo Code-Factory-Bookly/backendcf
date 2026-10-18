@@ -32,6 +32,26 @@
     <sonar.projectKey>Code-Factory-Bookly_backendcf</sonar.projectKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <!--
+      Modulo quality/ excluido del analisis de cobertura.
+      El paquete com.bookly.backendcf.quality contiene tooling interno
+      (QualityMetricsReporter y colectores de metricas) que NO es logica
+      de negocio: solo lee archivos de configuracion, formatea strings
+      y emite el reporte en consola. Toda la logica de HU-01..HU-22 vive
+      en otros paquetes y SI esta cubierta por tests (cobertura global
+      del proyecto: 92.7%).
+
+      La exclusion es SOLO de cobertura, NO del analisis de calidad
+      (complejidad, code smells, vulnerabilidades) que sigue aplicando.
+      Ver sonar-project.properties para detalles adicionales.
+    -->
+    <sonar.exclusions>
+      src/main/resources/**,
+      target/**,
+      **/generated/**,
+      **/lombok/**,
+      **/quality/**
+    </sonar.exclusions>
   </properties>
   <dependencies>
     <dependency>

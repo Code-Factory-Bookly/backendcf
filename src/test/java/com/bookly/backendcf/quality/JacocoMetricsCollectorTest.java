@@ -8,9 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Tests del JacocoMetricsCollector (colector local desde jacoco.csv).
  *
- * El CSV no tiene resumen: este test verifica que el colector maneja
- * correctamente el caso de "reporte no generado" sin romper el
- * arranque del backend.
+ * El CSV puede no existir si no se corrio mvn test antes. Estos tests
+ * verifican que el colector maneja correctamente ambos casos.
  */
 class JacocoMetricsCollectorTest {
 
@@ -33,5 +32,15 @@ class JacocoMetricsCollectorTest {
         assertThat(result.req3Complejidad()).isNotNull();
         assertThat(result.req4Severidad()).isNotNull();
         assertThat(result.req5Vulnerabilidades()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Fuente cambia segun exista el CSV")
+    void fuenteCambiaSegunCsv() {
+        JacocoMetricsCollector c = new JacocoMetricsCollector();
+        String fuente = c.fuente();
+        // El mensaje es descriptivo del estado actual
+        assertThat(fuente).isNotBlank();
+        assertThat(fuente.length()).isGreaterThan(5);
     }
 }

@@ -43,4 +43,25 @@ class SonarCloudMetricsCollectorTest {
         assertThat(c.collect().req1Cobertura().estado())
                 .isEqualTo(QualityMetrics.Estado.DESCONOCIDO);
     }
+
+    @Test
+    @DisplayName("Con token presente, fuente dice 'en vivo'")
+    void conTokenFuenteEsVivo() {
+        SonarCloudMetricsCollector c = new SonarCloudMetricsCollector("token-fake-123");
+        assertThat(c.fuente()).contains("en vivo");
+    }
+
+    @Test
+    @DisplayName("Token con HTTP no valido (500) son resultados que devuelve DESCONOCIDO")
+    void conTokenInvalidoCollectDevuelveDesconocido() {
+        // Token "valido" pero el server respondera 401/403.
+        // El colector debe manejar la excepcion sin lanzar.
+        SonarCloudMetricsCollector c = new SonarCloudMetricsCollector("token-invalido-para-test");
+        QualityMetrics result = c.collect();
+
+        // Por la excepcion, todos los requisitos quedan en DESCONOCIDO
+        assertThat(result).isNotNull();
+        // El mensaje en valor refleja el motivo
+        assertThat(result.req1Cobertura().valor()).contains("Error");
+    }
 }

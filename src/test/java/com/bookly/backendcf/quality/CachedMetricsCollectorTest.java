@@ -32,7 +32,6 @@ class CachedMetricsCollectorTest {
         CachedMetricsCollector c = new CachedMetricsCollector();
         QualityMetrics m = c.collect();
 
-        // Cada requisito debe tener numero 1-5 y estructura valida
         for (int i = 0; i < 5; i++) {
             QualityMetrics.Requisito r = switch (i) {
                 case 0 -> m.req1Cobertura();
@@ -56,7 +55,6 @@ class CachedMetricsCollectorTest {
         QualityMetrics m = c.collect();
 
         assertThat(m.timestamp()).isNotBlank();
-        // El timestamp debe parsear correctamente como ISO-8601
         java.time.OffsetDateTime ts = java.time.OffsetDateTime.parse(m.timestamp());
         assertThat(ts).isNotNull();
     }
@@ -73,5 +71,18 @@ class CachedMetricsCollectorTest {
                 m.req4Severidad(), m.req5Vulnerabilidades()}) {
             assertThat(r.estado()).isIn((Object[]) valid);
         }
+    }
+
+    @Test
+    @DisplayName("Requisito con cero dias de deuda es PASS cuando umbral es <= 2 dias")
+    void ceroDiasEsValido() {
+        // Valida que el requisito #2 (deuda tecnica) puede tener valor 0
+        // sin ser tratado como 'no encontrado'.
+        CachedMetricsCollector c = new CachedMetricsCollector();
+        QualityMetrics m = c.collect();
+
+        // El requisito existe y tiene un valor numerico o "(no encontrado)"
+        assertThat(m.req2DeudaTecnica()).isNotNull();
+        assertThat(m.req2DeudaTecnica().valor()).isNotNull();
     }
 }

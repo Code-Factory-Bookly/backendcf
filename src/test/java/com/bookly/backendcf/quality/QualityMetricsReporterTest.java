@@ -3,6 +3,9 @@ package com.bookly.backendcf.quality;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -29,6 +32,38 @@ class QualityMetricsReporterTest {
                 throw new RuntimeException("simulado");
             }
             @Override public String fuente() { return "stub-falla"; }
+        };
+    }
+
+    /** Colector stub que devuelve metricas todas en PASS. */
+    private static QualityMetricsCollector stubAllPass() {
+        return new QualityMetricsCollector() {
+            @Override public QualityMetrics collect() {
+                return new QualityMetrics(
+                        new QualityMetrics.Requisito(1, "r1", "v1", "u1", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(2, "r2", "v2", "u2", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(3, "r3", "v3", "u3", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(4, "r4", "v4", "u4", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(5, "r5", "v5", "u5", QualityMetrics.Estado.PASS, "stub"),
+                        "stub-allpass", "2026-01-01T00:00:00Z");
+            }
+            @Override public String fuente() { return "stub"; }
+        };
+    }
+
+    /** Colector stub con metricas mezcladas (algunas FAIL). */
+    private static QualityMetricsCollector stubMixto() {
+        return new QualityMetricsCollector() {
+            @Override public QualityMetrics collect() {
+                return new QualityMetrics(
+                        new QualityMetrics.Requisito(1, "r1", "v1", "u1", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(2, "r2", "v2", "u2", QualityMetrics.Estado.FAIL, "stub"),
+                        new QualityMetrics.Requisito(3, "r3", "v3", "u3", QualityMetrics.Estado.PASS, "stub"),
+                        new QualityMetrics.Requisito(4, "r4", "v4", "u4", QualityMetrics.Estado.WARN, "stub"),
+                        new QualityMetrics.Requisito(5, "r5", "v5", "u5", QualityMetrics.Estado.PASS, "stub"),
+                        "stub-mixto", "2026-01-01T00:00:00Z");
+            }
+            @Override public String fuente() { return "stub"; }
         };
     }
 
@@ -74,10 +109,66 @@ class QualityMetricsReporterTest {
                 stubOk(), jacocoStub, stubOk());
 
         QualityMetrics result = reporter.getCurrentMetrics();
-        // #1 cobertura viene de jacoco (PASS), no de cache
         assertThat(result.req1Cobertura().valor()).isEqualTo("90%");
         assertThat(result.req1Cobertura().estado()).isEqualTo(QualityMetrics.Estado.PASS);
-        // #3 complejidad viene de jacoco
         assertThat(result.req3Complejidad().valor()).isEqualTo("30");
+    }
+
+    @Test
+    @DisplayName("onWebServerReady imprime el reporte sin lanzar excepciones")
+    void onWebServerReadyNoLanzaExcepciones() {
+        QualityMetricsReporter reporter = new QualityMetricsReporter(
+                stubAllPass(), stubAllPass(), stubAllPass());
+
+        // Capturar stdout para no contaminar la consola del test
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer));
+        try {
+            reporter.onWebServerReady();
+        } finally {
+            System.setOut(original);
+        }
+
+        String output = buffer.toString();
+        assertThat(output).contains("CALIDAD DEL PROYECTO");
+        assertThat(output).contains("Todos los requisitos del Sprint 2/#3 estan en verde");
+    }
+
+    @Test
+    @DisplayName("onWebServerReady con fallos imprime sugerencias")
+    void onWebServerReadyConFallosImprimeSugerencias() {
+        QualityMetricsReporter reporter = new QualityMetricsReporter(
+                stubMixto(), stubMixto(), stubMixto());
+
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer));
+        try {
+            reporter.onWebServerReady();
+        } finally {
+            System.setOut(original);
+        }
+
+        String output = buffer.toString();
+        assertThat(output).contains("Sugerencias para mejorar el reporte");
+    }
+
+    @Test
+    @DisplayName("onWebServerReady maneja excepciones del colector sin romper")
+    void onWebServerReadyManejaExcepciones() {
+        QualityMetricsReporter reporter = new QualityMetricsReporter(
+                stubFalla(), stubFalla(), stubFalla());
+
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer));
+        try {
+            // No debe lanzar nada hacia afuera
+            reporter.onWebServerReady();
+        } finally {
+            System.setOut(original);
+        }
+        // Solo verificamos que no explota
     }
 }

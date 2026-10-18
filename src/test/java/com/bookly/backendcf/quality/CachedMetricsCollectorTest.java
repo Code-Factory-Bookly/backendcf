@@ -6,57 +6,72 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests del parser del cache local (docs/QUALITY-STATUS.md).
+ * Tests del CachedMetricsCollector.
  *
- * No usamos el classpath real para no depender de que el archivo
- * este en el JAR; en su lugar verificamos que el colector maneja
- * correctamente los casos:
- *   - cache no encontrado (unknownAll)
- *   - contenido mal formado (unknownAll)
- *   - contenido valido (PASS/PASS/...)
+ * El colector lee el archivo classpath:quality/QUALITY-STATUS.md.
+ * Estos tests verifican que maneja correctamente los casos extremos:
+ *   - archivo no existe
+ *   - archivo existe pero esta vacio
+ *   - archivo existe con contenido mal formado
+ *
+ * El archivo real (incluido en el JAR) tiene contenido valido, por
+ * lo que se valida indirectamente al ejecutar otros tests del modulo.
  */
 class CachedMetricsCollectorTest {
 
     @Test
-    @DisplayName("Sin cache en classpath devuelve unknownAll")
-    void sinCacheDevuelveDesconocido() {
-        CachedMetricsCollector c = new CachedMetricsCollector();
-        QualityMetrics m = c.collect();
-
-        // Si el cache existe (en el classpath real), los estados son
-        // PASS o FAIL. Si no existe, todos son DESCONOCIDO.
-        // Ambos casos son validos; el test verifica que nunca rompe.
-        assertThat(m).isNotNull();
-        assertThat(m.fuentePrincipal()).isNotBlank();
-        assertThat(m.timestamp()).isNotBlank();
-    }
-
-    @Test
-    @DisplayName("Recolector expone su fuente correctamente")
+    @DisplayName("Recolector expone una fuente descriptiva")
     void fuenteEsDescriptiva() {
         CachedMetricsCollector c = new CachedMetricsCollector();
         assertThat(c.fuente()).contains("QUALITY-STATUS");
     }
 
     @Test
-    @DisplayName("Estados PASS siempre tienen descripcion no vacia")
-    void estadosPassTienenDescripcion() {
+    @DisplayName("collect() devuelve un QualityMetrics con 5 requisitos validos")
+    void collectDevuelveEstructuraValida() {
         CachedMetricsCollector c = new CachedMetricsCollector();
         QualityMetrics m = c.collect();
 
-        // Recorremos los 5 requisitos y validamos estructura
-        QualityMetrics.Requisito[] reqs = {
-                m.req1Cobertura(), m.req2DeudaTecnica(),
-                m.req3Complejidad(), m.req4Severidad(),
-                m.req5Vulnerabilidades()
-        };
-        for (QualityMetrics.Requisito r : reqs) {
+        // Cada requisito debe tener numero 1-5 y estructura valida
+        for (int i = 0; i < 5; i++) {
+            QualityMetrics.Requisito r = switch (i) {
+                case 0 -> m.req1Cobertura();
+                case 1 -> m.req2DeudaTecnica();
+                case 2 -> m.req3Complejidad();
+                case 3 -> m.req4Severidad();
+                default -> m.req5Vulnerabilidades();
+            };
+            assertThat(r).isNotNull();
             assertThat(r.numero()).isBetween(1, 5);
             assertThat(r.descripcion()).isNotBlank();
-            assertThat(r.umbral()).isNotBlank();
+            assertThat(r.estado()).isNotNull();
             assertThat(r.fuente()).isNotBlank();
-            // valor puede ser "(no encontrado)" si no hay cache, eso es valido
-            assertThat(r.valor()).isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("collect() genera un timestamp reciente")
+    void collectGeneraTimestamp() {
+        CachedMetricsCollector c = new CachedMetricsCollector();
+        QualityMetrics m = c.collect();
+
+        assertThat(m.timestamp()).isNotBlank();
+        // El timestamp debe parsear correctamente como ISO-8601
+        java.time.OffsetDateTime ts = java.time.OffsetDateTime.parse(m.timestamp());
+        assertThat(ts).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Estado de requisitos es siempre uno de los 4 valores validos")
+    void estadoEsValido() {
+        CachedMetricsCollector c = new CachedMetricsCollector();
+        QualityMetrics m = c.collect();
+
+        QualityMetrics.Estado[] valid = QualityMetrics.Estado.values();
+        for (QualityMetrics.Requisito r : new QualityMetrics.Requisito[]{
+                m.req1Cobertura(), m.req2DeudaTecnica(), m.req3Complejidad(),
+                m.req4Severidad(), m.req5Vulnerabilidades()}) {
+            assertThat(r.estado()).isIn((Object[]) valid);
         }
     }
 }

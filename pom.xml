@@ -194,6 +194,65 @@
           </execution>
         </executions>
       </plugin>
+      <!--
+        Perfiles de ejecucion de pruebas:
+        - Por defecto (sin perfil): todos los tests marcados como "unit" o "integration".
+        - smoke: solo los tests anotados con @Tag("smoke") (mvn test -Psmoke).
+        - unit-only: solo tests marcados como "unit" (sin necesidad de BD).
+        - integration-only: solo tests marcados como "integration".
+
+        Para etiquetar un test, agregar @Tag("unit") o @Tag("integration").
+        Los tests sin etiqueta tambien corren por defecto.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>smoke</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>smoke</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>unit-only</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>unit</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>integration-only</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>integration</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

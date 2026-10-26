@@ -162,7 +162,7 @@ Las siguientes propiedades pueden definirse como variables de entorno:
 `JWT_SECRET` y `MFA_ENCRYPTION_KEY` deben definirse en `.env` a partir de `.env.example` y conservarse entre reinicios (y entre despliegues). Ambas se generan con:
 
 ```bash
-openssl rand -base64 48   # JWT_SECRET: cualquier longitud >= 64 bytes
+openssl rand -base64 48   # JWT_SECRET: >= 64 caracteres y al menos 10 distintos (se rechazan secretos repetitivos)
 openssl rand -base64 32   # MFA_ENCRYPTION_KEY: debe decodificar a exactamente 32 bytes (AES-256)
 ```
 

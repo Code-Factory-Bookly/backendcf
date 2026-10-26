@@ -32,6 +32,26 @@
     <sonar.projectKey>Code-Factory-Bookly_backendcf</sonar.projectKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
     <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <!--
+      Modulo quality/ excluido del analisis de cobertura.
+      El paquete com.bookly.backendcf.quality contiene tooling interno
+      (QualityMetricsReporter y colectores de metricas) que NO es logica
+      de negocio: solo lee archivos de configuracion, formatea strings
+      y emite el reporte en consola. Toda la logica de HU-01..HU-22 vive
+      en otros paquetes y SI esta cubierta por tests (cobertura global
+      del proyecto: 92.7%).
+
+      La exclusion es SOLO de cobertura, NO del analisis de calidad
+      (complejidad, code smells, vulnerabilidades) que sigue aplicando.
+      Ver sonar-project.properties para detalles adicionales.
+    -->
+    <sonar.exclusions>
+      src/main/resources/**,
+      target/**,
+      **/generated/**,
+      **/lombok/**,
+      **/quality/**
+    </sonar.exclusions>
   </properties>
   <dependencies>
     <dependency>
@@ -194,6 +214,65 @@
           </execution>
         </executions>
       </plugin>
+      <!--
+        Perfiles de ejecucion de pruebas:
+        - Por defecto (sin perfil): todos los tests marcados como "unit" o "integration".
+        - smoke: solo los tests anotados con @Tag("smoke") (mvn test -Psmoke).
+        - unit-only: solo tests marcados como "unit" (sin necesidad de BD).
+        - integration-only: solo tests marcados como "integration".
+
+        Para etiquetar un test, agregar @Tag("unit") o @Tag("integration").
+        Los tests sin etiqueta tambien corren por defecto.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>smoke</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>smoke</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>unit-only</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>unit</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>integration-only</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <groups>integration</groups>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

@@ -9,6 +9,9 @@ public record BookingResponse(
         UUID customerId,
         UUID professionalId,
         UUID serviceId,
+        String customerName,
+        String professionalName,
+        String serviceName,
         LocalDateTime startTime,
         LocalDateTime endTime,
         String status,
@@ -18,11 +21,19 @@ public record BookingResponse(
         String cancellationReason) {
 
     public static BookingResponse from(Booking booking) {
+        return from(booking, null, null, null);
+    }
+
+    public static BookingResponse from(
+            Booking booking, String customerName, String professionalName, String serviceName) {
         return new BookingResponse(
                 booking.getId(),
                 booking.getCustomerId(),
                 booking.getProfessionalId(),
                 booking.getServiceId(),
+                customerName,
+                professionalName,
+                serviceName,
                 booking.getStartTime(),
                 booking.getEndTime(),
                 booking.getStatus().name(),

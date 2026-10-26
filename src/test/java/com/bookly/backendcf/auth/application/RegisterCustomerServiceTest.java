@@ -70,6 +70,25 @@ class RegisterCustomerServiceTest {
     }
 
     @Test
+    void registroConDominioDesechableRechazaLaSolicitudSinConsultarLaBase() {
+        assertThrows(DisposableEmailDomainException.class,
+                () -> service.register(new RegisterCustomerRequest(
+                        "alguien@MAILINATOR.com", "Valid1!pass", "Customer One")));
+
+        verify(repository, never()).existsByEmail(any());
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void registroConCorreoSinArrobaNoSeTrataComoDesechable() {
+        when(repository.existsByEmail("sin-arroba")).thenReturn(true);
+
+        assertThrows(EmailAlreadyRegisteredException.class,
+                () -> service.register(new RegisterCustomerRequest(
+                        "sin-arroba", "Valid1!pass", "Customer One")));
+    }
+
+    @Test
     void registroConContrasenaDebilEsRechazadoPorLaValidacionDelContrato() {
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 

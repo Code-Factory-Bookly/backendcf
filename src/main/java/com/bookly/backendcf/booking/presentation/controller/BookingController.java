@@ -1,5 +1,6 @@
 package com.bookly.backendcf.booking.presentation.controller;
 
+import com.bookly.backendcf.booking.application.BookingNameDirectory;
 import com.bookly.backendcf.booking.application.service.CreateBookingService;
 import com.bookly.backendcf.booking.application.exception.BookingConflictException;
 import com.bookly.backendcf.booking.domain.model.Booking;
@@ -15,6 +16,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import java.util.UUID;
 
 @RestController
@@ -24,27 +27,30 @@ public class BookingController {
     private final CreateBookingService createBookingService;
     private final BookingRepository bookingRepository;
     private final OwnershipGuard ownershipGuard;
+    private final BookingNameDirectory nameDirectory;
 
     public BookingController(
             CreateBookingService createBookingService,
             BookingRepository bookingRepository,
-            OwnershipGuard ownershipGuard) {
+            OwnershipGuard ownershipGuard,
+            BookingNameDirectory nameDirectory) {
         this.createBookingService = createBookingService;
         this.bookingRepository = bookingRepository;
         this.ownershipGuard = ownershipGuard;
+        this.nameDirectory = nameDirectory;
     }
 
     @GetMapping("/cliente/{customerId}")
     public List<BookingResponse> getByCustomer(@PathVariable UUID customerId, Authentication authentication) {
         ownershipGuard.check(customerId, authentication);
-        return bookingRepository.findByCustomerId(customerId).stream().map(BookingResponse::from).toList();
+        return withNames(bookingRepository.findByCustomerId(customerId));
     }
 
     @GetMapping("/profesional/{professionalId}")
     public List<BookingResponse> getByProfessional(
             @PathVariable UUID professionalId, Authentication authentication) {
         ownershipGuard.check(professionalId, authentication);
-        return bookingRepository.findByProfessionalId(professionalId).stream().map(BookingResponse::from).toList();
+        return withNames(bookingRepository.findByProfessionalId(professionalId));
     }
 
     @PostMapping
@@ -79,6 +85,24 @@ public class BookingController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ErrorResponse("INVALID_REQUEST", e.getMessage()));
         }
+    }
+
+    private List<BookingResponse> withNames(List<Booking> bookings) {
+        Map<UUID, String> accountNames = nameDirectory.accountNames(bookings.stream()
+                .flatMap(b -> Stream.of(b.getCustomerId(), b.getProfessionalId()))
+                .distinct()
+                .toList());
+        Map<UUID, String> serviceNames = nameDirectory.serviceNames(bookings.stream()
+                .map(Booking::getServiceId)
+                .distinct()
+                .toList());
+        return bookings.stream()
+                .map(b -> BookingResponse.from(
+                        b,
+                        accountNames.get(b.getCustomerId()),
+                        accountNames.get(b.getProfessionalId()),
+                        serviceNames.get(b.getServiceId())))
+                .toList();
     }
 
     private record ErrorResponse(String error, String message) {}

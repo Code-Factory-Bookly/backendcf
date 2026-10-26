@@ -47,14 +47,7 @@ public class SecurityConfiguration {
         // CSRF deshabilitado a nivel global: la API es stateless con tokens JWT
         // bearer en el header Authorization (ADR-009). CSRF solo protege contra
         // ataques basados en cookies/sesion de navegador, que este backend no
-        // emite. Suprimimos java:S4502 localmente con justificacion documentada
-        // en sonar-project.properties (sonar.issue.ignore.multicriteria).
-        // nosonar java:S4502
-        // CSRF deshabilitado a nivel global: la API es stateless con tokens JWT
-        // bearer en el header Authorization (ADR-009). CSRF solo protege contra
-        // ataques basados en cookies/sesion de navegador, que este backend no
-        // emite. La exclusion de la regla java:S4502 esta documentada en
-        // sonar-project.properties con su justificacion tecnica.
+        // emite (regla de Sonar java:S4502, revisada y aceptada por este motivo).
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors ->

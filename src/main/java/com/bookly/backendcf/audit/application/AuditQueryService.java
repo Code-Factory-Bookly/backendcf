@@ -5,6 +5,8 @@ import com.bookly.backendcf.audit.presentation.dto.AuditLogPageResponse;
 import com.bookly.backendcf.audit.presentation.dto.AuditLogResponse;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,9 +20,11 @@ public class AuditQueryService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AuditLogQuery auditLogQuery;
+    private final AuditActorDirectory actorDirectory;
 
-    public AuditQueryService(AuditLogQuery auditLogQuery) {
+    public AuditQueryService(AuditLogQuery auditLogQuery, AuditActorDirectory actorDirectory) {
         this.auditLogQuery = auditLogQuery;
+        this.actorDirectory = actorDirectory;
     }
 
     @Transactional(readOnly = true)
@@ -35,8 +39,16 @@ public class AuditQueryService {
         Page<AuditLog> result = auditLogQuery.findByOccurredAtBetween(
                 range.from(), range.to(), pageable);
 
+        Map<UUID, AuditActorDirectory.Actor> actors = actorDirectory.findByIds(
+                result.getContent().stream().map(AuditLog::getActorUserId).collect(Collectors.toSet()));
+
         return new AuditLogPageResponse(
-                result.getContent().stream().map(AuditLogResponse::from).toList(),
+                result.getContent().stream().map(auditLog -> {
+                    AuditActorDirectory.Actor actor = actors.get(auditLog.getActorUserId());
+                    return actor == null
+                            ? AuditLogResponse.from(auditLog, null, null)
+                            : AuditLogResponse.from(auditLog, actor.fullName(), actor.email());
+                }).toList(),
                 result.getNumber(),
                 result.getSize(),
                 result.getTotalElements(),

@@ -10,6 +10,8 @@ import java.util.UUID;
 public record AuditLogResponse(
         UUID id,
         UUID actorUserId,
+        String actorName,
+        String actorEmail,
         AuditActionType actionType,
         AuditResourceType resourceType,
         UUID resourceId,
@@ -17,10 +19,12 @@ public record AuditLogResponse(
         String sourceIp,
         Map<String, String> metadata) {
 
-    public static AuditLogResponse from(AuditLog auditLog) {
+    public static AuditLogResponse from(AuditLog auditLog, String actorName, String actorEmail) {
         return new AuditLogResponse(
                 auditLog.getId(),
                 auditLog.getActorUserId(),
+                actorName,
+                actorEmail,
                 auditLog.getActionType(),
                 auditLog.getResourceType(),
                 auditLog.getResourceId(),

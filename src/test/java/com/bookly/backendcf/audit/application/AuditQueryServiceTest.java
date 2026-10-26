@@ -28,12 +28,56 @@ import org.springframework.data.domain.Pageable;
 class AuditQueryServiceTest {
 
     private AuditLogQuery auditLogQuery;
+    private AuditActorDirectory actorDirectory;
     private AuditQueryService service;
 
     @BeforeEach
     void setUp() {
         auditLogQuery = mock(AuditLogQuery.class);
-        service = new AuditQueryService(auditLogQuery);
+        actorDirectory = mock(AuditActorDirectory.class);
+        when(actorDirectory.findByIds(any())).thenReturn(Map.of());
+        service = new AuditQueryService(auditLogQuery, actorDirectory);
+    }
+
+    @Test
+    void enriqueceCadaRegistroConElNombreYCorreoDelActor() {
+        UUID actorId = UUID.randomUUID();
+        AuditLog auditLog = AuditLog.from(new AuditAction(
+                actorId,
+                AuditActionType.ROLE_CHANGED,
+                AuditResourceType.USER,
+                UUID.randomUUID(),
+                OffsetDateTime.now(),
+                null,
+                Map.of("previousRole", "CUSTOMER", "newRole", "PROFESSIONAL")));
+        when(auditLogQuery.findByOccurredAtBetween(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(auditLog)));
+        when(actorDirectory.findByIds(any()))
+                .thenReturn(Map.of(actorId, new AuditActorDirectory.Actor("Ana Admin", "ana@example.com")));
+
+        AuditLogResponse item = service.find(null, null, 0, 50).content().get(0);
+
+        assertThat(item.actorName()).isEqualTo("Ana Admin");
+        assertThat(item.actorEmail()).isEqualTo("ana@example.com");
+    }
+
+    @Test
+    void dejaElActorVacioSiLaCuentaYaNoExiste() {
+        AuditLog auditLog = AuditLog.from(new AuditAction(
+                UUID.randomUUID(),
+                AuditActionType.BOOKING_CREATED,
+                AuditResourceType.BOOKING,
+                UUID.randomUUID(),
+                OffsetDateTime.now(),
+                null,
+                Map.of()));
+        when(auditLogQuery.findByOccurredAtBetween(any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(auditLog)));
+
+        AuditLogResponse item = service.find(null, null, 0, 50).content().get(0);
+
+        assertThat(item.actorName()).isNull();
+        assertThat(item.actorEmail()).isNull();
     }
 
     @Test

@@ -39,6 +39,12 @@ class JwtTokenServiceTest {
     }
 
     @Test
+    void unSecretoLargoPeroDeBajaEntropiaNoPermiteCrearElServicio() {
+        assertThrows(IllegalArgumentException.class, () -> new JwtTokenService("a".repeat(64), 3600));
+        assertThrows(IllegalArgumentException.class, () -> new JwtTokenService("ab12".repeat(16), 3600));
+    }
+
+    @Test
     void exponeElTiempoDeExpiracionConfigurado() {
         assertEquals(3600, tokenService.getExpiresInSeconds());
     }

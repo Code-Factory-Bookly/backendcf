@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtTokenService {
     private static final int MIN_SECRET_LENGTH = 64;
+    private static final int MIN_DISTINCT_CHARS = 10;
     private static final long MFA_PENDING_SECONDS = 300;
     private static final String TYPE_CLAIM = "typ";
     private static final String MFA_PENDING_TYPE = "mfa";
@@ -40,6 +41,11 @@ public class JwtTokenService {
         if (secret.length() < MIN_SECRET_LENGTH) {
             throw new IllegalArgumentException(
                     "security.jwt.secret debe tener al menos " + MIN_SECRET_LENGTH + " caracteres");
+        }
+        // SEC-003: 64 caracteres repetidos pasarian la longitud sin aportar entropia real.
+        if (secret.chars().distinct().count() < MIN_DISTINCT_CHARS) {
+            throw new IllegalArgumentException(
+                    "security.jwt.secret es demasiado predecible: use un valor aleatorio (openssl rand -base64 48)");
         }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiresInSeconds = expiresInSeconds;

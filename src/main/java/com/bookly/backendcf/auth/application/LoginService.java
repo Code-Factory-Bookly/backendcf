@@ -18,6 +18,7 @@ public class LoginService {
     private final JwtTokenService tokenService;
     private final LoginAttemptRecorder loginAttemptRecorder;
     private final DeviceTrustService deviceTrustService;
+    private final IpLoginAttemptLimiter ipLoginAttemptLimiter;
     private final int maxAttempts;
     private final long lockMinutes;
 
@@ -25,6 +26,7 @@ public class LoginService {
                         JwtTokenService tokenService,
                         LoginAttemptRecorder loginAttemptRecorder,
                         DeviceTrustService deviceTrustService,
+                        IpLoginAttemptLimiter ipLoginAttemptLimiter,
                         @Value("${security.login.max-attempts:5}") int maxAttempts,
                         @Value("${security.login.lock-minutes:15}") long lockMinutes) {
         this.repository = repository;
@@ -32,30 +34,41 @@ public class LoginService {
         this.tokenService = tokenService;
         this.loginAttemptRecorder = loginAttemptRecorder;
         this.deviceTrustService = deviceTrustService;
+        this.ipLoginAttemptLimiter = ipLoginAttemptLimiter;
         this.maxAttempts = maxAttempts;
         this.lockMinutes = lockMinutes;
     }
 
-    public LoginResponse login(LoginRequest request) {
-        String email = request.email().trim().toLowerCase();
-        UserAccount account = repository.findByEmail(email).orElseThrow(InvalidCredentialsException::new);
-        OffsetDateTime now = OffsetDateTime.now();
+    // SEC-006: ipAddress permite bloquear por IP ademas de por email, para que un atacante no
+    // evada el bloqueo por email rotando correos desde la misma IP (credential stuffing).
+    public LoginResponse login(LoginRequest request, String ipAddress) {
+        ipLoginAttemptLimiter.checkAllowed(ipAddress);
+        try {
+            String email = request.email().trim().toLowerCase();
+            UserAccount account = repository.findByEmail(email).orElseThrow(InvalidCredentialsException::new);
+            OffsetDateTime now = OffsetDateTime.now();
 
-        if (!account.isEnabled() || account.isLocked(now)) {
-            throw new InvalidCredentialsException();
-        }
-        if (!passwordEncoder.matches(request.password(), account.getPasswordHash())) {
-            loginAttemptRecorder.recordFailure(email, maxAttempts, lockMinutes);
-            throw new InvalidCredentialsException();
-        }
+            if (!account.isEnabled() || account.isLocked(now)) {
+                throw new InvalidCredentialsException();
+            }
+            if (!passwordEncoder.matches(request.password(), account.getPasswordHash())) {
+                loginAttemptRecorder.recordFailure(email, maxAttempts, lockMinutes);
+                throw new InvalidCredentialsException();
+            }
 
-        if (account.getRole() == UserRole.ADMIN
-                && !deviceTrustService.isTrusted(account.getId(), request.deviceToken())) {
-            // El contador de intentos no se resetea aqui: solo el segundo factor lo hace (ADR-010).
-            return LoginResponse.mfaChallenge(tokenService, account);
+            if (account.getRole() == UserRole.ADMIN
+                    && !deviceTrustService.isTrusted(account.getId(), request.deviceToken())) {
+                // El contador de intentos no se resetea aqui: solo el segundo factor lo hace (ADR-010).
+                ipLoginAttemptLimiter.recordSuccess(ipAddress);
+                return LoginResponse.mfaChallenge(tokenService, account);
+            }
+            account.registerSuccessfulLogin(now);
+            repository.save(account);
+            ipLoginAttemptLimiter.recordSuccess(ipAddress);
+            return LoginResponse.authenticated(tokenService, account);
+        } catch (InvalidCredentialsException exception) {
+            ipLoginAttemptLimiter.recordFailure(ipAddress);
+            throw exception;
         }
-        account.registerSuccessfulLogin(now);
-        repository.save(account);
-        return LoginResponse.authenticated(tokenService, account);
     }
 }

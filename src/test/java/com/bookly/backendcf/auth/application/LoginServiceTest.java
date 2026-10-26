@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class LoginServiceTest {
+    private static final String TEST_IP = "127.0.0.1";
+
     private UserAccountRepository repository;
     private LoginService service;
     private UserAccount account;
@@ -55,12 +57,13 @@ class LoginServiceTest {
                 });
         service = new LoginService(repository, new BCryptPasswordEncoder(),
                 new JwtTokenService("test-secret-that-is-at-least-sixty-four-characters-long-for-tests", 3600),
-                new LoginAttemptRecorder(repository), new DeviceTrustService(trustedDeviceRepository), 5, 15);
+                new LoginAttemptRecorder(repository), new DeviceTrustService(trustedDeviceRepository),
+                new IpLoginAttemptLimiter(20, 15), 5, 15);
     }
 
     @Test
     void loginExitosoEntregaTokenYReiniciaContador() {
-        LoginResponse response = service.login(new LoginRequest(" CUSTOMER@EXAMPLE.COM ", "Valid1!pass", null));
+        LoginResponse response = service.login(new LoginRequest(" CUSTOMER@EXAMPLE.COM ", "Valid1!pass", null), TEST_IP);
 
         assertNotNull(response.accessToken());
         assertEquals("Bearer", response.tokenType());
@@ -68,9 +71,25 @@ class LoginServiceTest {
     }
 
     @Test
+    void rotarCorreosDesdeLaMismaIpTerminaBloqueadoPorIp() {
+        LoginService strict = new LoginService(repository, new BCryptPasswordEncoder(),
+                new JwtTokenService("test-secret-that-is-at-least-sixty-four-characters-long-for-tests", 3600),
+                new LoginAttemptRecorder(repository), null, new IpLoginAttemptLimiter(2, 15), 5, 15);
+
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            String email = "nadie" + attempt + "@example.com";
+            assertThrows(InvalidCredentialsException.class,
+                    () -> strict.login(new LoginRequest(email, "Wrong1!pass", null), TEST_IP));
+        }
+
+        assertThrows(TooManyLoginAttemptsException.class,
+                () -> strict.login(new LoginRequest("customer@example.com", "Valid1!pass", null), TEST_IP));
+    }
+
+    @Test
     void credencialesIncorrectasDevuelvenErrorYRegistranIntento() {
         assertThrows(InvalidCredentialsException.class,
-                () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null)));
+                () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null), TEST_IP));
 
         assertEquals(1, account.getFailedLoginAttempts());
     }
@@ -81,7 +100,7 @@ class LoginServiceTest {
     void quintoIntentoFallidoBloqueaLaCuentaSinDistinguirloEnLaRespuesta() {
         for (int attempt = 1; attempt <= 5; attempt++) {
             assertThrows(InvalidCredentialsException.class,
-                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null)));
+                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null), TEST_IP));
         }
 
         assertEquals(5, account.getFailedLoginAttempts());
@@ -94,10 +113,10 @@ class LoginServiceTest {
     void elContadorNoSigueCreciendoTrasElBloqueo() {
         for (int attempt = 1; attempt <= 6; attempt++) {
             assertThrows(InvalidCredentialsException.class,
-                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null)));
+                    () -> service.login(new LoginRequest("customer@example.com", "Wrong1!pass", null), TEST_IP));
         }
         assertThrows(InvalidCredentialsException.class,
-                () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass", null)));
+                () -> service.login(new LoginRequest("customer@example.com", "Valid1!pass", null), TEST_IP));
 
         assertEquals(5, account.getFailedLoginAttempts());
     }
@@ -119,7 +138,7 @@ class LoginServiceTest {
         setId(account, UUID.randomUUID());
         account.registerFailedLogin(OffsetDateTime.now(), 10, 15);
 
-        LoginResponse response = service.login(new LoginRequest("admin@example.com", "Valid1!pass", null));
+        LoginResponse response = service.login(new LoginRequest("admin@example.com", "Valid1!pass", null), TEST_IP);
 
         assertTrue(response.mfaRequired());
         assertTrue(response.mfaSetupRequired());

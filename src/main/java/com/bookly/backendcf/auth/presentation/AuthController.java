@@ -14,6 +14,7 @@ import com.bookly.backendcf.auth.presentation.dto.MfaVerifyRequest;
 import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerRequest;
 import com.bookly.backendcf.auth.presentation.dto.RegisterCustomerResponse;
 import com.bookly.backendcf.auth.security.JwtTokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -53,8 +54,21 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return loginService.login(request);
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        return loginService.login(request, resolveClientIp(httpRequest));
+    }
+
+    // Render y otros PaaS ponen la app detras de un proxy: la IP real del cliente llega en
+    // X-Forwarded-For, no en getRemoteAddr() (esa seria la IP del proxy). Se toma la ULTIMA
+    // entrada, la que agrega el proxy de confianza; la primera la controla el cliente y podria
+    // rotarla para evadir el limite.
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            String[] hops = forwardedFor.split(",");
+            return hops[hops.length - 1].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @PostMapping("/mfa/enroll")

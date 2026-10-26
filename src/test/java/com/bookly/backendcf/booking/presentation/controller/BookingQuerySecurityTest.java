@@ -56,7 +56,8 @@ class BookingQuerySecurityTest {
         mockMvc.perform(get("/api/v1/reservas/cliente/{id}", customer.getId())
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].customerId").value(customer.getId().toString()));
+                .andExpect(jsonPath("$[0].customerId").value(customer.getId().toString()))
+                .andExpect(jsonPath("$[0].customerName").value("Usuario prueba"));
     }
 
     @Test

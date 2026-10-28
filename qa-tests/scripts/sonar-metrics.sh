@@ -44,7 +44,7 @@ api() {
 }
 
 QG="$(api "/qualitygates/project_status?projectKey=${PROJECT_KEY}&branch=${BRANCH}")"
-VULNS_JSON="$(api "/issues/search?componentKeys=${PROJECT_KEY}&branch=${BRANCH}&types=VULNERABILITY&resolved=false&ps=100")"
+ISSUES_JSON="$(api "/issues/search?componentKeys=${PROJECT_KEY}&branch=${BRANCH}&types=BUG,VULNERABILITY&resolved=false&ps=100")"
 MEASURES="$(api "/measures/component?component=${PROJECT_KEY}&branch=${BRANCH}&metricKeys=coverage,line_coverage,branch_coverage,sqale_index,new_coverage,new_technical_debt,complexity,cognitive_complexity,violations,bugs,vulnerabilities,security_hotspots,duplicated_lines_density,ncloc,files,reliability_rating,security_rating,new_critical_violations,new_vulnerabilities")"
 
 metric() {
@@ -70,6 +70,7 @@ BUGS="$(metric bugs)"
 VULNERABILITIES="$(metric vulnerabilities)"
 NEW_VULNS="$(metric new_vulnerabilities)"
 CRITICAL="$(metric new_critical_violations)"
+OPEN_CRITICAL="$(jq -r '[.issues[]? | select(.severity == "CRITICAL" or .severity == "BLOCKER")] | length' <<<"$ISSUES_JSON")"
 HOTSPOTS="$(metric security_hotspots)"
 NC_LOC="$(metric ncloc)"
 FILES="$(metric files)"
@@ -120,6 +121,7 @@ printf ' %-34s %s\n' "Bugs" "${BUGS:-N/A}"
 printf ' %-34s %s\n' "Vulnerabilidades" "${VULNERABILITIES:-N/A}"
 printf ' %-34s %s\n' "Vulnerabilidades nuevas" "${NEW_VULNS:-N/A}"
 printf ' %-34s %s\n' "Criticas nuevas" "${CRITICAL:-N/A}"
+printf ' %-34s %s\n' "Criticas/bloqueantes abiertas" "${OPEN_CRITICAL:-0}"
 printf ' %-34s %s\n' "Security hotspots" "${HOTSPOTS:-N/A}"
 printf ' %-34s %s\n' "Lineas duplicadas" "${DUPLICATION:-N/A}%"
 printf ' %-34s %s\n' "Rating confiabilidad / seguridad" "${RELIABILITY:-N/A} / ${SECURITY:-N/A}"
@@ -149,7 +151,7 @@ printf '| %-24s | %-34s | %-10s | %s |\n' \
     "$([[ "$MAX_COMPLEXITY" =~ ^[0-9]+$ ]] && [[ "$MAX_COMPLEXITY" -lt 50 ]] && echo "CUMPLE" || echo "NO CUMPLE")"
 printf '| %-24s | %-34s | %-10s | %s |\n' \
     "Vulnerabilidades" "Cero criticas" "Debe" \
-    "$([[ "$CRITICAL" =~ ^[0-9]+$ ]] && [[ "$CRITICAL" -eq 0 ]] && echo "CUMPLE" || echo "NO CUMPLE")"
+    "$([[ "${OPEN_CRITICAL:-1}" =~ ^[0-9]+$ ]] && [[ "$OPEN_CRITICAL" -eq 0 ]] && echo "CUMPLE" || echo "NO CUMPLE")"
 printf '| %-24s | %-34s | %-10s | %s |\n' \
     "Historias de usuario" "Criterios en Gherkin" "Debe" \
     "$(has_gherkin && echo "CUMPLE" || echo "NO CUMPLE")"
@@ -161,13 +163,19 @@ echo
 echo "=============================================================================="
 
 echo
-echo " VULNERABILIDADES DETALLADAS"
+echo " HALLAZGOS ABIERTOS (bugs + vulnerabilidades)"
 echo "------------------------------------------------------------------------------"
-VULN_COUNT="$(jq -r '.total // 0' <<<"$VULNS_JSON")"
-if [[ "$VULN_COUNT" == "0" ]]; then
-    echo " Sin vulnerabilidades abiertas en esta rama."
+ISSUE_COUNT="$(jq -r '.total // 0' <<<"$ISSUES_JSON")"
+if [[ "$ISSUE_COUNT" == "0" ]]; then
+    echo " Sin bugs ni vulnerabilidades abiertos en esta rama."
 else
-    jq -r '.issues[]? | "\n [\(.severity // "N/A")] \(.rule // "N/A")  -  \(.component // "N/A" | sub("^[^:]*:"; ""))\n     \(.message // "N/A")\n     Creado: \(.creationDate // "N/A")  |  Estado: \(.status // "N/A")  |  Tipo: \(.type // "N/A")"' <<<"$VULNS_JSON"
+    jq -r '.issues[]? | "
+ [\(.type // "N/A")] [\(.severity // "N/A")] \(.rule // "N/A")
+     Archivo  : \(.component // "N/A" | sub("^[^:]*:"; ""))
+     Mensaje  : \(.message // "N/A")
+     Impacto  : \((.impacts // []) | map("\(.softwareQuality)=\(.severity)") | join(", "))
+     Estado   : \(.status // "N/A")  |  Creado: \(.creationDate // "N/A")  |  Esfuerzo: \(.effort // "N/A")
+"' <<<"$ISSUES_JSON"
 fi
 
 echo

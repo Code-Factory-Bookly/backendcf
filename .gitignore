@@ -48,3 +48,11 @@ notas _de_clase/
 # Documentos de Calidad de uso interno — NUNCA se suben al repositorio
 Plan_Calidad_Software.md
 Diagrama_Estructura_Proyecto.md
+
+# QA / E2E — resultados generados localmente (no versionar)
+qa-tests/**/.e2e-results/
+qa-tests/**/summary/
+qa-tests/**/seed.env
+qa-tests/**/*.log
+qa-tests/**/*.body
+qa-tests/**/*.code

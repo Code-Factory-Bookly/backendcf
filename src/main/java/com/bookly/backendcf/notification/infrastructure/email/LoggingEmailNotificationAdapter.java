@@ -3,11 +3,13 @@ package com.bookly.backendcf.notification.infrastructure.email;
 import com.bookly.backendcf.notification.application.EmailNotificationPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
-@Component
-@ConditionalOnProperty(name = "notification.email.provider", havingValue = "logging", matchIfMissing = true)
+/**
+ * Adaptador de email que registra el envio en el log.
+ *
+ * <p>Se instancia desde {@link EmailNotificationConfiguration}, que decide
+ * cuando es el adaptador activo segun {@code notification.email.provider}.</p>
+ */
 public class LoggingEmailNotificationAdapter implements EmailNotificationPort {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LoggingEmailNotificationAdapter.class);

@@ -2,14 +2,15 @@ package com.bookly.backendcf.notification.infrastructure.email;
 
 import com.bookly.backendcf.notification.application.EmailNotificationPort;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.stereotype.Component;
 
-/** Adaptador SMTP; las credenciales se obtienen exclusivamente de configuración externa. */
-@Component
-@ConditionalOnProperty(name = "notification.email.provider", havingValue = "smtp")
+/**
+ * Adaptador SMTP; las credenciales se obtienen exclusivamente de configuracion externa.
+ *
+ * <p>Se instancia desde {@link EmailNotificationConfiguration}, que decide
+ * cuando es el adaptador activo segun {@code notification.email.provider}.</p>
+ */
 public class SmtpEmailNotificationAdapter implements EmailNotificationPort {
 
     private final JavaMailSender mailSender;

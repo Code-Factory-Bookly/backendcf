@@ -44,6 +44,7 @@ api() {
 }
 
 QG="$(api "/qualitygates/project_status?projectKey=${PROJECT_KEY}&branch=${BRANCH}")"
+VULNS_JSON="$(api "/issues/search?componentKeys=${PROJECT_KEY}&branch=${BRANCH}&types=VULNERABILITY&resolved=false&ps=100")"
 MEASURES="$(api "/measures/component?component=${PROJECT_KEY}&branch=${BRANCH}&metricKeys=coverage,line_coverage,branch_coverage,sqale_index,new_coverage,new_technical_debt,complexity,cognitive_complexity,violations,bugs,vulnerabilities,security_hotspots,duplicated_lines_density,ncloc,files,reliability_rating,security_rating,new_critical_violations,new_vulnerabilities")"
 
 metric() {
@@ -98,9 +99,6 @@ has_quality_pipeline() {
         && grep -qi 'sonar-maven-plugin:sonar' "$wf" \
         && grep -qi 'SONAR_TOKEN' "$wf"
 }
-
-echo
-echo "=============================================================================="
 echo " PROYECTO:       ${PROJECT_KEY}"
 echo " RAMA ACTUAL:    ${CURRENT_BRANCH}"
 echo " RAMA ANALIZADA: ${BRANCH}"
@@ -158,6 +156,19 @@ printf '| %-24s | %-34s | %-10s | %s |\n' \
 printf '| %-24s | %-34s | %-10s | %s |\n' \
     "Pipeline (Calidad)" "SonarCloud + cobertura" "Debe" \
     "$(has_quality_pipeline && echo "CUMPLE" || echo "NO CUMPLE")"
+
+echo
+echo "=============================================================================="
+
+echo
+echo " VULNERABILIDADES DETALLADAS"
+echo "------------------------------------------------------------------------------"
+VULN_COUNT="$(jq -r '.total // 0' <<<"$VULNS_JSON")"
+if [[ "$VULN_COUNT" == "0" ]]; then
+    echo " Sin vulnerabilidades abiertas en esta rama."
+else
+    jq -r '.issues[]? | "\n [\(.severity // "N/A")] \(.rule // "N/A")  -  \(.component // "N/A" | sub("^[^:]*:"; ""))\n     \(.message // "N/A")\n     Creado: \(.creationDate // "N/A")  |  Estado: \(.status // "N/A")  |  Tipo: \(.type // "N/A")"' <<<"$VULNS_JSON"
+fi
 
 echo
 echo "=============================================================================="

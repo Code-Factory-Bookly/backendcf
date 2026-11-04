@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * Tests del QualityMetricsReporter.
@@ -165,10 +166,9 @@ class QualityMetricsReporterTest {
         System.setOut(new PrintStream(buffer));
         try {
             // No debe lanzar nada hacia afuera
-            reporter.onWebServerReady();
+            assertThatCode(reporter::onWebServerReady).doesNotThrowAnyException();
         } finally {
             System.setOut(original);
         }
-        // Solo verificamos que no explota
     }
 }

@@ -4,6 +4,8 @@
 
 Este documento describe el plan de calidad y pruebas de Bookly Backend para el Sprint 1 (7 HU según el tablero real de Azure DevOps: HU-01, HU-02, HU-03, HU-06, HU-20, HU-21, HU-22), el estado real de la suite de pruebas, y lo que falta para cumplir el Quality Gate exigido por los `Lineamientos.md` antes del cierre del sprint (23/09/2026).
 
+**Actualización del 2026-11-03:** el documento se alineó con el estado real de `main` tras el Sprint 2 (suite de 418 métodos de prueba en 79 clases, 422 ejecuciones según SonarCloud; módulos `booking`, `availability`, `schedule`, `audit`, `notification` y MFA; smoke tests; migración de JWT a `jjwt`). El estado actual de SonarCloud y de los criterios de `Lineamientos.md` está en la sección 18.
+
 **Actualizado el 2026-09-21:** el rol `PATIENT` se renombró a `CUSTOMER` en todo el código (PR #12, migración Flyway `V4`) — este documento ya usa el nombre real. **Segunda actualización, mismo día:** se agregó `JwtTokenServiceTest` (PR #18, Quality Gate `OK`) y se corrigió en el tablero de Azure DevOps la anomalía de HU-21 (ver secciones 6, 8 y 10).
 
 Los criterios de aceptación en Gherkin de cada HU viven en `HU_Reservas_Empresa_Unica.md`; este documento  los usa como base de trazabilidad hacia las pruebas automatizadas.
@@ -27,7 +29,7 @@ Según `Lineamientos.md`, secciones 3.5, 7.2 y 9.1:
 | Sprint | Entregable exigido | Estado en `backendcf` |
 |---|---|---|
 | 1 | Plan de calidad y pruebas; Gherkin para HU prioritarias | Gherkin completo en `HU_Reservas_Empresa_Unica.md` (22 HU, sincronizado contra el tablero real). Este documento cubre el plan de pruebas. |
-| 2 | Registro de defectos; SonarCloud activo; cobertura medida; pruebas con patrón AAA | Pipeline y JaCoCo agregados (sección 7); **bloqueo de SonarCloud ya resuelto** (ver sección 7.3) — el análisis corre real en cada PR/push. Quality Gate del proyecto (`branch=main`) en **`OK`**, 92.6% de cobertura de código nuevo (vs 80% que exige el gate por defecto de SonarCloud, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo) |
+| 2 | Registro de defectos; SonarCloud activo; cobertura medida; pruebas con patrón AAA | Pipeline y JaCoCo activos (sección 7); el análisis de SonarCloud corre en cada PR/push. Cobertura global **92.6%** (≥ 65% exigido). Defectos corregidos en el sprint listados en la sección 20. **Quality Gate de `main` en `ERROR`** al 2026-11-03 por un único bug (sección 18) |
 | 3 | Automatización de criterios de aceptación; ejecución E2E | No iniciado — depende de que Sprint 1 y 2 cierren cobertura unitaria primero |
 
 ## 4. Trazabilidad HU → Gherkin → prueba automatizada
@@ -109,47 +111,39 @@ HU-20 tiene sus 4 escenarios Gherkin cubiertos entre `PlatformSetupServiceTest` 
 
 ## 5. Estado real de la suite de pruebas
 
-```text
-src/test/java/com/bookly/backendcf/
-├── auth/application/LoginServiceTest.java                          # 3,  HU-03
-├── auth/application/RegisterCustomerServiceTest.java               # 3,  HU-01 (Mockito)
-├── auth/domain/model/UserAccountTest.java                          # 6,  reglas de dominio
-├── auth/security/JwtTokenServiceTest.java                          # 10, riesgo JWT (firma/expiración/estructura)
-├── availability/application/AvailabilityServiceTest.java           # 10, HU-07 (servicio, Mockito)
-├── availability/application/AvailabilityIntegrationTest.java       # 4,  HU-07 (PostgreSQL real)
-├── availability/domain/model/AvailabilityCalculatorTest.java       # 8,  HU-07 (regla de dominio)
-├── availability/infrastructure/persistence/AvailabilityQueryAdapterTest.java # 5, HU-07 (adaptador, Mockito)
-├── availability/presentation/AvailabilityControllerSecurityTest.java # 5, HU-07 (contrato HTTP/seguridad)
-├── catalog/application/ServiceOfferingServiceTest.java             # 5,  HU-02 (servicio, Mockito)
-├── catalog/domain/model/ServiceOfferingTest.java                   # 10, HU-06 (dominio/duración)
-├── catalog/presentation/ServiceOfferingControllerTest.java         # 5,  HU-02 (contrato HTTP, @WebMvcTest)
-├── catalog/presentation/dto/ServiceOfferingRequestValidationTest.java # 14, HU-06 (validación del DTO)
-├── platform/application/PlatformSetupServiceTest.java              # 4,  HU-20 (servicio, Mockito)
-├── platform/presentation/PlatformSetupControllerTest.java          # 3,  HU-20 (contrato HTTP, @WebMvcTest)
-├── platform/presentation/dto/PlatformSetupRequestValidationTest.java # 3, HU-20 (validación del DTO)
-├── professional/application/RegisterProfessionalServiceTest.java   # 4,  HU-22 (servicio, Mockito)
-├── professional/presentation/ProfessionalControllerSecurityTest.java # 3, HU-22 (contrato HTTP/seguridad)
-├── shared/security/OwnershipGuardTest.java                         # 3,  HU-21 (Mockito)
-└── BackendcfApplicationTests.java                                   # 1,  smoke test de contexto Spring
-```
+Fuente: conteo de métodos `@Test`/`@ParameterizedTest` en `src/test` sobre `main` (commit `969452a`, 2026-11-03) y análisis de SonarCloud de ese mismo commit: **418 métodos de prueba en 79 clases; SonarCloud reporta 422 ejecuciones, 0 fallos**.
 
-**77 tests en `main`, todos en verde** (`./mvnw test`, verificado el 2026-09-22). Las 7 HU de Sprint 1 están mergeadas — ya no hay PR pendientes que sumar aparte.
+| Módulo (`src/test/java/com/bookly/backendcf/`) | Clases | Métodos | HU / foco |
+|---|---|---|---|
+| `auth` | 17 | 105 | HU-01, HU-03, HU-17, HU-18 (MFA/TOTP), JWT, recuperación de contraseña, límite de intentos por IP, seguridad de controladores |
+| `booking` | 15 | 97 | HU-08, HU-09; concurrencia e integración contra PostgreSQL real; lectura de reservas por dueño |
+| `quality` | 7 | 46 | Colectores de métricas de SonarCloud y JaCoCo (tooling interno, ver sección 19) |
+| `availability` | 5 | 32 | HU-07 (servicio, dominio, adaptador, integración con PostgreSQL real, seguridad) |
+| `catalog` | 4 | 29 | HU-02, HU-06 |
+| `audit` | 7 | 26 | HU-19 (servicio, listeners, persistencia, seguridad del endpoint) |
+| `professional` | 6 | 23 | HU-22, asignación de servicios a profesionales |
+| `schedule` | 2 | 17 | HU-04 |
+| `notification` | 5 | 15 | HU-10 |
+| `platform` | 3 | 10 | HU-20 |
+| `shared` | 4 | 10 | HU-21 (`OwnershipGuard`), `GlobalExceptionHandler`, identidad del actor |
+| `smoke` | 3 | 7 | Arranque del contexto y endpoints básicos (ver sección 19) |
+| `BackendcfApplicationTests` | 1 | 1 | Contexto Spring |
 
-Sin prueba directa todavía: `JwtAuthenticationFilter`, `AuthController`, `GlobalExceptionHandler` — son los únicos tres componentes de Sprint 1 sin cobertura (`PlatformSetupService`/HU-20 ya se cubrió, ver arriba).
+**Pruebas que requieren PostgreSQL real** (`localhost:55432`, base `bookly_test`): `AvailabilityIntegrationTest`, `BookingConcurrencyTest`, `BookingCancellationConcurrencyTest` y `BookingCancellationIntegrationTest`. El workflow `ci.yml` levanta ese PostgreSQL como servicio; en local hay que arrancarlo a mano (sección 9). El resto corre contra H2.
 
-`LoginServiceTest` simula el repositorio con un `Proxy` de reflexión hecho a mano en vez de Mockito. El resto de los tests nuevos (`RegisterCustomerServiceTest`, `OwnershipGuardTest`, `RegisterProfessionalServiceTest` del PR #15, y `JwtTokenServiceTest` del PR #18) sí usan Mockito o son de unidad plana sin mocks — conviene migrar `LoginServiceTest` al mismo patrón cuando se retome.
+**Componentes que en Sprint 1 figuraban sin prueba directa y hoy sí la tienen:** `AuthController` (`AuthControllerSecurityTest`, `AuthLoginIpLimitTest`) y `GlobalExceptionHandler` (`GlobalExceptionHandlerTest`, `GlobalExceptionHandlerSecurityTest`). `JwtAuthenticationFilter` no tiene una clase de prueba propia; se ejerce de forma indirecta en los tests `*SecurityTest`, que autentican con tokens reales.
 
-**HU-07:** 34 pruebas automatizadas, todas en verde (`./mvnw test`, verificado el 2026-10-10). Incluye 4 pruebas de integración contra PostgreSQL real (`AvailabilityIntegrationTest`, requieren la base `bookly_test` en el puerto 55432, igual que `BookingConcurrencyTest`).
+`LoginServiceTest` sigue simulando el repositorio con un `Proxy` de reflexión hecho a mano en vez de Mockito (pendiente de Sprint 2 sin resolver). El resto de la suite usa Mockito, `@WebMvcTest` o pruebas de unidad planas.
 
 ## 6. Defectos y riesgos de calidad detectados
 
 | Riesgo | Ubicación | Impacto |
 |---|---|---|
-| Carrera de duplicados (check-then-act sin atomicidad) | `RegisterCustomerService.register`, `PlatformSetupService`, `ServiceOfferingService` (todos con `existsByEmail`/`count()` → `save()` sin atomicidad) | Dos solicitudes concurrentes pueden generar una excepción de integridad no mapeada al contrato de error esperado, en vez de un 409 controlado |
-| JWT construido a mano | `JwtTokenService` | Arma/parsea JSON con concatenación de strings e `indexOf`/`substring`; el `escape()` solo cubre `\` y `"`. **Ya tiene test** (`JwtTokenServiceTest`, PR #18, 10 escenarios: firma/payload alterado, expiración, secreto distinto, estructura inválida) — el riesgo pasó de "no verificado" a "verificado y pineado por test", pero el diseño artesanal sigue siendo el mismo; migrar a una librería vetada (`io.jsonwebtoken`) sigue recomendado para Sprint 2 |
+| Carrera de duplicados (check-then-act sin atomicidad) | **Pendiente solo en** `ServiceOfferingService.create` (`existsByNameIgnoreCase` → `save()`). `RegisterCustomerService` y `PlatformSetupService` ya usan `saveAndFlush` con `catch (DataIntegrityViolationException)` | Dos solicitudes concurrentes que creen el mismo servicio pueden generar una excepción de integridad no mapeada a un 409 controlado |
+| ~~JWT construido a mano~~ **Resuelto** | `JwtTokenService` | Migrado a la librería `io.jsonwebtoken` (`jjwt`, commit `3780cd5`; ver `ADR-009`). `JwtTokenServiceTest` (15 métodos) se actualizó en esa misma migración. El commit `be56637` (SEC-003) además rechaza secretos JWT de baja entropía |
 | Secreto JWT no persistente | `JwtTokenService` | El constructor ya rechaza secreto vacío o menor a 32 bytes (falla al arrancar si `JWT_SECRET` no está seteado, en vez de generar uno aleatorio) — cubierto por dos de los diez casos de `JwtTokenServiceTest` (PR #18) |
 
-**A favor — ya corregido en un caso:** `RegisterProfessionalService` (HU-22, PR #15) **sí** resuelve bien el mismo patrón de carrera: usa `saveAndFlush` dentro de un `try/catch` de `DataIntegrityViolationException`, traducido a `EmailAlreadyRegisteredException`. Vale la pena usar ese código como referencia al corregir los otros tres servicios de la fila de arriba, en vez de reinventar el patrón cada vez.
+**A favor:** `RegisterProfessionalService`, `RegisterCustomerService` y `PlatformSetupService` resuelven el patrón de carrera con `saveAndFlush` dentro de un `try/catch` de `DataIntegrityViolationException`. Ese mismo patrón es la referencia para corregir `ServiceOfferingService.create`.
 
 ## 7. Pipeline de calidad (CI/SonarCloud)
 
@@ -185,13 +179,13 @@ https://sonarcloud.io/dashboard?id=Code-Factory-Bookly_backendcf&branch=main
 
 **Incidente del 22/09 — `SONAR_TOKEN` rechazado, ya resuelto:** entre el merge del PR #15 (00:48) y el PR #22 (05:12), las 8 corridas de CI en `main` fallaron con `HTTP 403 Forbidden. Please check ... SONAR_TOKEN` — el token había quedado inválido. `Compilar` y `Tests y cobertura` seguían pasando bien; solo el análisis de Sonar se caía. Se regeneró el token en SonarCloud y se actualizó el secreto en GitHub (17:43); se reintentó la corrida (`gh run rerun`, sin necesitar un commit nuevo) y terminó en verde.
 
-**Estado real del Quality Gate hoy** (verificado vía API pública de SonarCloud, no solo el checkmark):
+**Estado real del Quality Gate:** consultar siempre la API y no solo el check de GitHub. El estado al 2026-11-03 (commit `969452a`) está en la sección 18; comando:
 
 ```
 GET https://sonarcloud.io/api/qualitygates/project_status?projectKey=Code-Factory-Bookly_backendcf&branch=main
 ```
 
-`branch=main`: **`status: OK`** — `new_coverage: 92.6%` vs `80%` exigido (el gate por defecto de SonarCloud mide cobertura de *código nuevo*, más estricto que el 65% de `Lineamientos.md` sobre el proyecto completo). Reliability, security, maintainability, duplicación y hotspots también en verde. Análisis corrido el 2026-09-22 sobre el commit `1be78fd` (el más reciente, con las 7 HU ya mergeadas).
+También existe `qa-tests/scripts/sonar-metrics.sh`, que consulta la API y evalúa los criterios de calidad del equipo (requiere `jq`).
 
 ## 8. Pruebas pendientes para cerrar Sprint 1
 
@@ -205,9 +199,9 @@ Actualizado con las 7 HU reales de Sprint 1:
 6. ~~`JwtTokenServiceTest`~~ — hecho e integrado (10 escenarios: firma/payload alterado, expiración, secreto distinto, estructura inválida y validación del constructor).
 7. ~~`ServiceOfferingService` (HU-02)~~ — hecho e integrado; `registroConNombreYaExistenteEnElCatalogoEsRechazado` cubre el duplicado por nombre (sección 4).
 8. ~~`PlatformSetupServiceTest` (HU-20)~~ — hecho e integrado (10 tests entre servicio, controlador y validación del DTO, sección 4).
-9. **`JwtAuthenticationFilterTest`**, **`AuthControllerTest`** y **`GlobalExceptionHandlerTest`** — únicos componentes de Sprint 1 sin test todavía, sin cambios.
+9. ~~`AuthController` y `GlobalExceptionHandler`~~ — hecho (ver sección 5). Solo `JwtAuthenticationFilter` carece de una clase de prueba propia; se cubre de forma indirecta.
 
-Las 7 HU de Sprint 1 tienen cobertura automatizada completa. Lo único pendiente (punto 9) es cobertura adicional de componentes transversales que no bloquean la implementación funcional de ninguna HU.
+Las 7 HU de Sprint 1 tienen cobertura automatizada completa.
 
 ## 9. Ejecución local
 
@@ -245,22 +239,22 @@ La integración funcional disponible quedó cubierta así:
 |---|---|---|
 | `BOOKING_CREATED` | `BookingCreatedAuditListener` | `BookingCreatedAuditListenerTest` |
 | `ROLE_CHANGED` | `RoleChangedAuditListener` | `RoleChangedAuditListenerTest`, `RoleAssignmentServiceTest` |
-| `BOOKING_CANCELLED` | Pendiente de HU-09 | No existe todavía el evento consumidor en `main` |
+| `BOOKING_CANCELLED` | `BookingCancelledAuditListener` | El listener existe en `main` desde HU-09, pero no tiene una clase de prueba propia (a diferencia de `BookingCreatedAuditListenerTest` y `RoleChangedAuditListenerTest`); pendiente |
 
 La auditoría se publica de forma síncrona dentro de la transacción de negocio. Si la persistencia de
 la bitácora falla, la operación de negocio no debe confirmarse. La persistencia e inmutabilidad de
 PostgreSQL se validan adicionalmente con `AuditLogPersistenceTest` y
 `docs/evidencia/HU-19-integridad.sql`.
 
-Para continuar el cierre de Sprint 1: mantener la cobertura y corregir el patrón de carrera check-then-act en `RegisterCustomerService`/`PlatformSetupService`/`ServiceOfferingService` (usando como referencia la corrección ya aplicada en `RegisterProfessionalService`). HU-06, HU-22 y la cobertura de `JwtTokenService` ya están integradas.
+Pendiente de Sprint 1 que sigue abierto: corregir el patrón de carrera check-then-act en `ServiceOfferingService.create` (los otros servicios ya lo corrigen).
 
 **Resuelto el 2026-09-21:** la anomalía de HU-21 en el tablero de Azure DevOps (work item 32) — estaba sin Sprint asignado pese a estar mergeada desde el PR #13. Ya se movió a `Sprint 1` vía API. El `State` se dejó en `Active` a propósito (no se cerró unilateralmente el work item de David; falta que él lo pase a `Closed`).
 
-Para Sprint 2 (Lineamientos 3.7): llevar la cobertura real por encima del 80% de código nuevo que exige el gate por defecto de SonarCloud, reescribir `LoginServiceTest` con Mockito en vez del `Proxy` manual, agregar la etapa de Seguridad al pipeline (SAST/SCA/detección de secretos), armar la etapa de Despliegue (hoy `backendcf` no está desplegado en ningún lado), y registrar defectos de forma trazable en Azure DevOps (el tipo de work item `Bug` ya está disponible, todavía no se usó ninguno).
+Estado de las metas de Sprint 2 (Lineamientos 3.7): la cobertura de código nuevo está en 93.1% (supera el 80% del gate); quedan pendientes reescribir `LoginServiceTest` con Mockito en vez del `Proxy` manual, agregar la etapa de Seguridad al pipeline (SAST/SCA/detección de secretos) y armar la etapa de Despliegue (el workflow `ci.yml` solo compila, prueba y analiza). Los defectos del sprint se registraron con identificadores BUG-/SEC- y quedaron corregidos en PRs (sección 20).
 
-Para Sprint 3: automatizar los criterios de aceptación Gherkin restantes y sumar ejecución E2E. La migración del JWT artesanal a una librería vetada (`io.jsonwebtoken`, ya usada en `Fab2016`) sigue recomendada, pero ya no es bloqueante para tener cobertura — `JwtTokenServiceTest` (PR #18) fija el comportamiento actual, así que la migración puede evaluarse con red de seguridad en vez de a ciegas.
+Para Sprint 3: automatizar los criterios de aceptación Gherkin restantes y sumar ejecución E2E.
 
-**Documentos formales que faltan** (según Clases 6 y 7 del curso, distintos entre sí): un **SQAP** consolidado (IEEE 730, 7 secciones) y un **Plan de Pruebas** formal (IEEE 829/ISO 29119: alcance In/Out-of-Scope, criterios de entrada/salida/suspensión/reanudación, matriz de riesgos) — ninguno de los dos existe todavía para `backendcf`.
+**Documentos formales** (según Clases 6 y 7 del curso): el SQAP (IEEE 730) y el Plan de Pruebas (IEEE 829/ISO 29119) no están versionados en este repositorio; se mantienen fuera de él.
 
 ### revisado por Adrian Espinosa
 ### co-redactado con codex.
@@ -375,7 +369,7 @@ El solapamiento se valida en el servicio, no con una restricción de exclusión 
 
 La unicidad de la franja la garantiza la base con la restricción `unique_booking_per_professional_time` (`V30__create_bookings.sql`); el servicio traduce la violación a `409 SLOT_OCUPADO` (ADR-006).
 
-**Nota de limpieza de QA:** `BookingComprehensiveTest.java` (clase `BookingComprehensiveTestFinal`) no sigue la convención de nombres de Surefire (termina en "Final", no en "Test"/"Tests") y el CI nunca la ejecuta. Si se corre a mano, 7 de sus 26 casos fallan porque mockean `bookingRepository.save()` cuando `CreateBookingService` usa `saveAndFlush()` — queda como código de prueba muerto y desactualizado, duplicado del que sí corre en `CreateBookingServiceTest`. Pendiente que el equipo de `booking` la borre o la corrija.
+**Nota de limpieza de QA (resuelta):** `BookingComprehensiveTest.java` era código de prueba muerto (nombre fuera de la convención de Surefire, duplicado de `CreateBookingServiceTest`); se eliminó en el commit `a6ee506` y ya no existe en el repositorio.
 
 ## 15. HU-09 — Cancelación autónoma de reservas
 
@@ -406,7 +400,84 @@ El secreto TOTP se cifra con `MFA_ENCRYPTION_KEY` (AES-256) antes de persistirse
 ## 17. Evidencia ejecutada (Sprint 2, HU-04/08/09/17/18)
 
 ```bash
-./mvnw -q -Dtest='!AvailabilityIntegrationTest,!BookingCancellationConcurrencyTest,!BookingCancellationIntegrationTest,!BookingConcurrencyTest,!BookingComprehensiveTestFinal' test
+./mvnw -q -Dtest='!AvailabilityIntegrationTest,!BookingCancellationConcurrencyTest,!BookingCancellationIntegrationTest,!BookingConcurrencyTest' test
 ```
 
 Ejecutado localmente contra H2 (sin la base PostgreSQL de integración que usa el CI para las pruebas de concurrencia e integración real): **303 pruebas, 0 fallos, 0 errores**, incluidas `WeeklyScheduleServiceTest`, `ScheduleControllerSecurityTest`, `RoleAssignmentServiceTest`, `UserRoleControllerSecurityTest`, `CreateBookingServiceTest`, `BookingControllerTest`, `CancelBookingServiceTest`, `CancelBookingControllerTest`, `CancelBookingSecurityTest`, `BookingQuerySecurityTest`, `MfaServiceTest` y `MfaSettingsControllerSecurityTest`. Las cuatro clases que exigen PostgreSQL real en `localhost:55432` (`AvailabilityIntegrationTest` y las tres de `booking` de concurrencia/integración) y el reporte de cobertura consolidado quedan a cargo del pipeline de CI, que sí tiene ese Postgres disponible.
+
+## 18. Estado de SonarCloud y criterios de `Lineamientos.md` (2026-11-03)
+
+Fuente: API pública de SonarCloud, `branch=main`, análisis del commit `969452a` (2026-11-03). Reproducible con los comandos de la sección 7.3.
+
+### Quality Gate: `ERROR`
+
+| Condición | Umbral | Actual | Estado |
+|---|---|---|---|
+| Fiabilidad en código nuevo | rating A | D (4) | Falla |
+| Seguridad en código nuevo | rating A | A | Cumple |
+| Mantenibilidad en código nuevo | rating A | A | Cumple |
+| Cobertura en código nuevo | ≥ 80% | 93.1% | Cumple |
+| Duplicación en código nuevo | ≤ 3% | 0.4% | Cumple |
+| Hotspots de seguridad revisados | 100% | 100% | Cumple |
+
+El "código nuevo" se mide desde la versión de referencia del 2026-09-16 (`previous_version`), por lo que abarca casi todo el proyecto.
+
+### Métricas globales
+
+| Métrica | Valor |
+|---|---|
+| Cobertura global / líneas / ramas | 92.6% / 94.8% / 82.2% |
+| Tests / fallos | 422 / 0 |
+| Líneas de código (ncloc) | 6,471 |
+| Deuda técnica | 0 min (rating A) |
+| Duplicación global | 0.8% |
+| Hotspots de seguridad | 0 |
+| Vulnerabilidades | 0 (rating de seguridad A) |
+| Complejidad ciclomática total / cognitiva total | 852 / 346 |
+
+### Criterios de `Lineamientos.md` (secciones 3.5, 7.2, 9.1)
+
+| Criterio | Meta | Actual | Estado |
+|---|---|---|---|
+| Análisis estático con Quality Gate activo | gate pasando | `ERROR` | No cumple |
+| Cobertura unitaria | ≥ 65% | 92.6% | Cumple |
+| Deuda técnica | ≤ 2 días | 0 min | Cumple |
+| Complejidad ciclomática | < 50 (también cognitiva) | Por clase, `QualityMetricsReporter` tiene 53 y `MfaService` 45; ningún método supera la complejidad cognitiva de 15 que Sonar marca por defecto | Cumple por clase salvo `QualityMetricsReporter` (tooling interno) |
+| Vulnerabilidades críticas | cero | 0 | Cumple |
+
+El criterio de complejidad no precisa si se mide por proyecto o por clase; este documento y `qa-tests/scripts/sonar-metrics.sh` lo evalúan por clase.
+
+### Issues abiertos
+
+| Regla | Severidad | Ubicación | Estado |
+|---|---|---|---|
+| `java:S9352` (bug) | Crítica | `NotificationService.java:43` | Sonar sigue marcando la ambigüedad entre `loggingEmailNotificationAdapter` y `smtpEmailNotificationAdapter`, aunque el PR #65 movió la elección del adaptador a `EmailNotificationConfiguration`. Es el único issue que mantiene el gate en `ERROR`; verificar en el siguiente análisis si desaparece o si hay que marcarlo como falso positivo |
+| `java:S2699` (code smell) | Bloqueante | `QualityMetricsReporterTest.java:159` | **Resuelto** con el PR #66 (test sin aserción corregido); ya no aparece en el análisis de `969452a` |
+
+## 19. Smoke tests, perfiles de ejecución y herramientas de calidad
+
+- **Smoke tests** (`src/test/java/.../smoke/`, 7 métodos): `SmokeTest` (arranque del contexto), `PublicEndpointsSmokeTest` (endpoints públicos y protegidos) y `AuthFlowSmokeTest` (registro y login). Se ejecutan con `./mvnw -B test -Psmoke`. Ver `src/test/java/com/bookly/backendcf/smoke/README.md`.
+- **Perfiles Maven:** `smoke` filtra por `@Tag("smoke")`. `unit-only` e `integration-only` filtran por `@Tag("unit")` y `@Tag("integration")`, etiquetas que ninguna prueba usa hoy, así que esos dos perfiles ejecutarían cero pruebas hasta que se etiqueten.
+- **Módulo `quality/`:** imprime un reporte de métricas de calidad al arrancar la aplicación (colectores de SonarCloud y JaCoCo con caché). Es tooling interno: `sonar.coverage.exclusions` lo excluye de la cobertura (`**/quality/**`) pero sigue sujeto al resto del análisis estático.
+- **`qa-tests/scripts/sonar-metrics.sh`:** consulta la API de SonarCloud y evalúa los criterios de calidad del equipo. Requiere `curl`, `jq`, `awk` y `git`.
+- **Pipeline:** `ci.yml` compila, ejecuta las pruebas (con PostgreSQL 16 como servicio en el puerto 55432) y lanza el análisis de SonarCloud. No tiene etapa de seguridad (SAST/SCA/secretos) ni de despliegue.
+
+## 20. Defectos del Sprint 2 corregidos
+
+Los defectos se identifican con códigos `BUG-`/`SEC-` (MantisBT) y con números en el nombre de la rama (`bug-181` a `bug-191`); cada corrección entró a `main` por un PR o commit:
+
+| Área | PR / commit | Corrección |
+|---|---|---|
+| Reservas | #46 | Permitir cancelación de reservas por ADMIN (HU-09) |
+| Reservas | #47 | Validar la disponibilidad del profesional al crear reservas (HU-08) |
+| Reservas | #48 | Evitar solapamiento de reservas concurrentes (HU-08) |
+| Reservas | #54 | Evitar enumeración de IDs en cancelaciones no autorizadas |
+| MFA | #50 | Garantizar la persistencia de los 10 códigos de recuperación |
+| MFA | #52 | Permitir la reconfiguración después de desactivar MFA |
+| Horarios | #51, #53, #55 | Devolver 400 para horarios inválidos, rechazar tipos de datos inválidos y devolver 404 para profesionales inexistentes |
+| Búsqueda | #56 | No exponer usuarios con consultas cortas |
+| Auditoría | #57 | Definir fechas predeterminadas en las consultas de auditoría |
+| Autenticación | `ba43b29` (BUG-001), `68dfb38` (BUG-005) | Recortar el correo antes de validar el formato; resolver el rol contra la base en cada petición |
+| Autenticación | `97b7b6f` (SEC-006, SEC-014), `be56637` (SEC-003) | Bloqueo de login por IP, filtro de dominios desechables y rechazo de secretos JWT de baja entropía |
+
+La columna de corrección resume el título del PR o commit; el detalle de cada defecto está en el registro de defectos del equipo.

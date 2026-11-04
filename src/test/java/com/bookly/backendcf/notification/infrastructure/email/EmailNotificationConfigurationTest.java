@@ -55,6 +55,9 @@ class EmailNotificationConfigurationTest {
                             .hasSize(1)
                             .allSatisfy((name, bean) ->
                                     assertThat(bean).isInstanceOf(SmtpEmailNotificationAdapter.class));
+                    // @Primary del bean SMTP existe solo para java:S9352; no altera cual se inyecta
+                    assertThat(context.getBean(EmailNotificationPort.class))
+                            .isInstanceOf(SmtpEmailNotificationAdapter.class);
                 });
     }
 }

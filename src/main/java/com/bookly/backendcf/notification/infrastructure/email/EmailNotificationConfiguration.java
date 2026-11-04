@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.mail.javamail.JavaMailSender;
 
 /**
@@ -43,8 +44,13 @@ public class EmailNotificationConfiguration {
      *
      * <p>Las credenciales se obtienen exclusivamente de configuracion externa
      * ({@code spring.mail.*}), nunca del codigo.</p>
+     *
+     * <p>{@code @Primary} existe solo para el analisis estatico (java:S9352): Sonar no
+     * evalua {@code @ConditionalOnProperty} y ve dos candidatos. En ejecucion es
+     * inocuo, porque cuando este bean existe el de logging no se registra.</p>
      */
     @Bean
+    @Primary
     @ConditionalOnProperty(name = "notification.email.provider", havingValue = "smtp")
     public EmailNotificationPort smtpEmailNotificationPort(
             JavaMailSender mailSender,

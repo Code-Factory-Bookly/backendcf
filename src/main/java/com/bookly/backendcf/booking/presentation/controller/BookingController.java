@@ -1,10 +1,13 @@
 package com.bookly.backendcf.booking.presentation.controller;
 
 import com.bookly.backendcf.booking.application.BookingNameDirectory;
+import com.bookly.backendcf.booking.application.CustomerBookingHistoryService;
 import com.bookly.backendcf.booking.application.service.CreateBookingService;
 import com.bookly.backendcf.booking.application.exception.BookingConflictException;
 import com.bookly.backendcf.booking.domain.model.Booking;
+import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
+import com.bookly.backendcf.booking.presentation.dto.BookingHistoryPageResponse;
 import com.bookly.backendcf.booking.presentation.dto.BookingResponse;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingRequest;
 import com.bookly.backendcf.booking.presentation.dto.CreateBookingResponse;
@@ -19,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import java.util.UUID;
+import java.time.LocalDateTime;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/v1/reservas")
@@ -28,16 +33,35 @@ public class BookingController {
     private final BookingRepository bookingRepository;
     private final OwnershipGuard ownershipGuard;
     private final BookingNameDirectory nameDirectory;
+    private final CustomerBookingHistoryService customerBookingHistoryService;
 
     public BookingController(
             CreateBookingService createBookingService,
             BookingRepository bookingRepository,
             OwnershipGuard ownershipGuard,
-            BookingNameDirectory nameDirectory) {
+            BookingNameDirectory nameDirectory,
+            CustomerBookingHistoryService customerBookingHistoryService) {
         this.createBookingService = createBookingService;
         this.bookingRepository = bookingRepository;
         this.ownershipGuard = ownershipGuard;
         this.nameDirectory = nameDirectory;
+        this.customerBookingHistoryService = customerBookingHistoryService;
+    }
+
+    @GetMapping("/cliente/historial")
+    public BookingHistoryPageResponse getOwnHistory(
+            Authentication authentication,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) BookingStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "asc") String order) {
+        UUID customerId = UUID.fromString(authentication.getName());
+        return customerBookingHistoryService.find(
+                customerId, from, to, status, page, size, order);
     }
 
     @GetMapping("/cliente/{customerId}")

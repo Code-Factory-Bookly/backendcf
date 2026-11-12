@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     API REST versionada del Caso 14 para HU-01, HU-02, HU-03, HU-04, HU-06, HU-07, HU-08,
-    HU-09, HU-17, HU-18, HU-19, HU-20, HU-21 y HU-22. HU-10 no agrega endpoints REST:
+    HU-09, HU-15, HU-17, HU-18, HU-19, HU-20, HU-21 y HU-22. HU-10 no agrega endpoints REST:
     sus notificaciones se procesan internamente a partir de eventos de reserva.
 externalDocs:
   description: Diseño y contrato interno de notificaciones de HU-10
@@ -21,6 +21,7 @@ tags:
   - name: Audit
   - name: Reservas
   - name: Availability
+  - name: Reports
 paths:
   /auth/register:
     post:
@@ -545,6 +546,34 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /reportes/ocupacion:
+    get:
+      tags: [Reports]
+      summary: Reporte de ocupación de las agendas por periodo
+      description: >-
+        Devuelve el porcentaje de ocupación de las agendas de los profesionales por día de la semana y por
+        profesional (HU-15). La ocupación es minutos reservados sobre minutos de capacidad, donde la capacidad
+        sale del horario semanal (HU-04). Solo cuentan las reservas CONFIRMADA y COMPLETED. El periodo SEMANA
+        abarca los últimos 7 días y MES los últimos 30, ambos terminando hoy. Si no hay reservas responde 200
+        con todos los valores en cero. Solo el rol ADMIN.
+        Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 403 ACCESS_DENIED.
+      operationId: getOccupancyReport
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: periodo
+          in: query
+          required: false
+          description: Periodo del reporte. Por defecto MES. No distingue mayúsculas de minúsculas.
+          schema: { type: string, enum: [SEMANA, MES], default: MES }
+      responses:
+        '200':
+          description: Reporte de ocupación del periodo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OccupancyReportResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
   /reservas:
     post:
       tags: [Reservas]
@@ -868,6 +897,36 @@ components:
         days:
           type: array
           items: { $ref: '#/components/schemas/AvailabilityDay' }
+    OccupancyReportResponse:
+      type: object
+      properties:
+        period: { type: string, enum: [SEMANA, MES] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        overallOccupancyPercent: { type: number, format: double, minimum: 0, maximum: 100 }
+        byDayOfWeek:
+          type: array
+          description: Siempre incluye los 7 días de la semana.
+          items: { $ref: '#/components/schemas/OccupancyDay' }
+        byProfessional:
+          type: array
+          description: Un elemento por profesional registrado, ordenado por nombre.
+          items: { $ref: '#/components/schemas/OccupancyProfessional' }
+    OccupancyDay:
+      type: object
+      properties:
+        dayOfWeek: { type: string, enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY] }
+        bookedMinutes: { type: integer, format: int64, minimum: 0 }
+        capacityMinutes: { type: integer, format: int64, minimum: 0 }
+        occupancyPercent: { type: number, format: double, minimum: 0, maximum: 100 }
+    OccupancyProfessional:
+      type: object
+      properties:
+        professionalId: { type: string, format: uuid }
+        professionalName: { type: string }
+        bookedMinutes: { type: integer, format: int64, minimum: 0 }
+        capacityMinutes: { type: integer, format: int64, minimum: 0 }
+        occupancyPercent: { type: number, format: double, minimum: 0, maximum: 100 }
     AuditLogPageResponse:
       type: object
       properties:

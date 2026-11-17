@@ -7,8 +7,10 @@ import com.bookly.backendcf.booking.domain.model.Booking;
 import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
+import com.bookly.backendcf.schedule.application.AgendaBlocks;
 import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.stereotype.Service;
@@ -34,15 +36,27 @@ public class CreateBookingService {
     private final BookingRepository bookingRepository;
     private final BookingEventPublisher eventPublisher;
     private final WeeklySlotRepository weeklySlotRepository;
+    private final AgendaBlocks agendaBlocks;
 
     public CreateBookingService(
             BookingRepository bookingRepository,
             BookingEventPublisher eventPublisher,
             WeeklySlotRepository weeklySlotRepository
     ) {
+        this(bookingRepository, eventPublisher, weeklySlotRepository, AgendaBlocks.NONE);
+    }
+
+    @Autowired
+    public CreateBookingService(
+            BookingRepository bookingRepository,
+            BookingEventPublisher eventPublisher,
+            WeeklySlotRepository weeklySlotRepository,
+            AgendaBlocks agendaBlocks
+    ) {
         this.bookingRepository = bookingRepository;
         this.eventPublisher = eventPublisher;
         this.weeklySlotRepository = weeklySlotRepository;
+        this.agendaBlocks = agendaBlocks;
     }
 
     @Transactional
@@ -61,6 +75,7 @@ public class CreateBookingService {
                 startTime,
                 endTime
         );
+        validateNotBlocked(professionalId, startTime, endTime);
 
         List<Booking> overlapping =
                 bookingRepository.findOverlappingBookings(
@@ -196,6 +211,20 @@ public class CreateBookingService {
         if (startTime.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException(
                     "No puedes agendar en el pasado"
+            );
+        }
+    }
+
+    // HU-05: el profesional bloqueó ese rango (vacaciones, imprevistos).
+    private void validateNotBlocked(
+            UUID professionalId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        if (!agendaBlocks.findOverlapping(professionalId, startTime, endTime).isEmpty()) {
+            throw new BookingConflictException(
+                    "SLOT_BLOCKED",
+                    "El profesional bloqueó ese horario en su agenda"
             );
         }
     }

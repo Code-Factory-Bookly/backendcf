@@ -39,4 +39,26 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdForUpdate(
             @Param("bookingId") UUID bookingId
     );
+
+    // HU-12: cuenta las reservas confirmadas que utilizan un
+    // recurso fisico durante un intervalo determinado.
+    // Incluye reservas de todos los profesionales.
+    // Dos intervalos que solo se tocan no se superponen.
+    @Query("""
+            SELECT COUNT(b)
+            FROM Booking b
+            WHERE b.status = 'CONFIRMADA'
+              AND b.startTime < :endTime
+              AND b.endTime > :startTime
+              AND b.serviceId IN (
+                  SELECT sr.serviceId
+                  FROM ServiceResource sr
+                  WHERE sr.resourceId = :resourceId
+              )
+            """)
+    long countConfirmedOverlappingByResource(
+            @Param("resourceId") UUID resourceId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime
+    );
 }

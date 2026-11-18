@@ -62,7 +62,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldCreateBookingSuccessfully() {
         LocalDateTime startTime =
-                LocalDateTime.now().plusDays(1);
+                LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime =
                 startTime.plusMinutes(45);
 
@@ -182,7 +182,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldRejectIfSlotOccupied() {
         LocalDateTime startTime =
-                LocalDateTime.now().plusDays(1);
+                LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime =
                 startTime.plusMinutes(45);
 
@@ -293,7 +293,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateOverlapConstraintViolationToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -317,7 +317,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateUniqueConstraintViolationToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -345,7 +345,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateDeadlockToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -367,7 +367,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldPropagateUnrelatedIntegrityViolation() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime = startTime.plusMinutes(45);
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException("foreign key violation");
@@ -392,7 +392,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldPropagateViolationFromAnotherConstraint() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1);
+        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
         LocalDateTime endTime = startTime.plusMinutes(45);
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException(

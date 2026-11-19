@@ -140,6 +140,23 @@ El módulo `availability` no tiene tablas propias: calcula los bloques libres a 
 La consulta es informativa: no bloquea bloques. La integridad ante reservas simultáneas sigue
 garantizada por `POST /api/v1/reservas` (ver ADR-006).
 
+### Componentes de HU-15 (reporte de ocupación)
+
+El módulo `report` no tiene tablas propias: calcula la ocupación a partir de los datos de `booking`,
+`schedule`, `professional` y `auth`, que consulta a través del puerto `OccupancyQuery`.
+
+| Componente | Responsabilidad |
+|---|---|
+| `ReportController` | `GET /api/v1/reportes/ocupacion` con el parámetro opcional `periodo`; solo rol ADMIN (regla en `SecurityConfiguration`) |
+| `ReportPeriodConverter` | Convierte `periodo` sin distinguir mayúsculas; un valor desconocido termina en `400 VALIDATION_ERROR` por el `GlobalExceptionHandler` |
+| `OccupancyReportService` | Calcula el rango (7 o 30 días terminando hoy), consulta los datos y arma la respuesta por día de la semana y por profesional |
+| `OccupancyQuery` | Puerto que declara los datos necesarios: profesionales, franjas semanales, reservas que ocupan agenda y nombres |
+| `OccupancyQueryAdapter` | Implementa el puerto con `ProfessionalRepository`, `WeeklySlotRepository`, `BookingRepository` y `UserAccountRepository` |
+| `OccupancyCalculator` | Regla de dominio: minutos reservados, capacidad y porcentaje con tope de 100; devuelve 0 cuando no hay capacidad |
+
+El reporte es de solo lectura (`@Transactional(readOnly = true)`) y usa el índice `idx_bookings_start_time`,
+por lo que no agrega migraciones. Sin reservas en el periodo responde ceros, sin excepciones.
+
 ## 7. Flujo de login
 
 ```mermaid

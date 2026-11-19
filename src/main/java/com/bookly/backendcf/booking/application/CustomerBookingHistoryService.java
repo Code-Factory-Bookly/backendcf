@@ -23,6 +23,14 @@ public class CustomerBookingHistoryService {
 
     private static final int MAX_PAGE_SIZE = 100;
 
+    /**
+     * Mensaje que se devuelve cuando el cliente autenticado todavia no tiene reservas.
+     *
+     * <p>Es publico para que las pruebas (y cualquier consumidor del caso de uso) comparen
+     * contra el literal real de produccion y no contra una copia desincronizada.
+     */
+    public static final String MESSAGE_SIN_RESERVAS = "Aún no cuentas con reservas registradas";
+
     private final BookingRepository bookingRepository;
     private final BookingNameDirectory nameDirectory;
 
@@ -66,7 +74,7 @@ public class CustomerBookingHistoryService {
                 .toList());
 
         String message = result.isEmpty()
-                ? "Aún no cuentas con reservas registradas"
+                ? MESSAGE_SIN_RESERVAS
                 : null;
 
         return new BookingHistoryPageResponse(

@@ -33,12 +33,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     List<Booking> findByCustomerId(UUID customerId);
 
+    // HU-13: los filtros opcionales se comparan contra un parametro que puede ser null.
+    // PostgreSQL no puede inferir el tipo de un parametro sin tipo en la expresion
+    // ":parametro IS NULL" y responde "could not determine data type of parameter $n",
+    // por lo que el cast explicito es obligatorio para que la consulta funcione
+    // contra la base real (no solo contra H2 en las pruebas unitarias).
+    // Sin el CAST, este endpoint devuelve 500 en produccion. Ver HU-13.
+    // El enum se castea a String porque JPQL no admite el tipo Java del enum.
     @Query("""
             SELECT b FROM Booking b
             WHERE b.customerId = :customerId
-              AND (:from IS NULL OR b.startTime >= :from)
-              AND (:to IS NULL OR b.startTime <= :to)
-              AND (:status IS NULL OR b.status = :status)
+              AND (CAST(:from AS LocalDateTime) IS NULL OR b.startTime >= :from)
+              AND (CAST(:to AS LocalDateTime) IS NULL OR b.startTime <= :to)
+              AND (CAST(:status AS String) IS NULL OR b.status = :status)
             """)
     Page<Booking> findCustomerHistory(
             @Param("customerId") UUID customerId,

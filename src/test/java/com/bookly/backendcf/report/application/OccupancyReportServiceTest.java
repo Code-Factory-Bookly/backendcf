@@ -165,7 +165,7 @@ class OccupancyReportServiceTest {
 
         // Assert
         DayOccupancy diaMartes = response.byDayOfWeek().stream()
-                .filter(day -> day.dayOfWeek() == DayOfWeek.TUESDAY)
+                .filter(day -> day.dayOfWeek().equals(DayOfWeek.TUESDAY))
                 .findFirst()
                 .orElseThrow();
         assertThat(diaMartes.bookedMinutes()).isEqualTo(60L);
@@ -412,7 +412,7 @@ class OccupancyReportServiceTest {
     private LocalDate lunesDelRangoSemanal() {
         LocalDate desde = hoy.minusDays(6);
         for (LocalDate date = desde; !date.isAfter(hoy); date = date.plusDays(1)) {
-            if (date.getDayOfWeek() == DayOfWeek.MONDAY) {
+            if (date.getDayOfWeek().equals(DayOfWeek.MONDAY)) {
                 return date;
             }
         }
@@ -422,7 +422,7 @@ class OccupancyReportServiceTest {
     /** Día de la semana concreto dentro del reporte generado. */
     private DayOccupancy dayOf(OccupancyReportResponse response, DayOfWeek day) {
         List<DayOccupancy> days = response.byDayOfWeek().stream()
-                .filter(item -> item.dayOfWeek() == day)
+                .filter(item -> item.dayOfWeek().equals(day))
                 .toList();
         assertThat(days).hasSize(1);
         return days.get(0);
@@ -437,7 +437,7 @@ class OccupancyReportServiceTest {
         LocalDate desde = hoy.minusDays(6);
         LocalDate martes = null;
         for (LocalDate date = desde; !date.isAfter(hoy); date = date.plusDays(1)) {
-            if (date.getDayOfWeek() == DayOfWeek.TUESDAY) {
+            if (date.getDayOfWeek().equals(DayOfWeek.TUESDAY)) {
                 martes = date;
             }
         }

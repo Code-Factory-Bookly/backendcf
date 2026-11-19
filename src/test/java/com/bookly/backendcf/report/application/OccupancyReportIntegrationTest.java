@@ -263,7 +263,7 @@ class OccupancyReportIntegrationTest {
         OccupancyReportResponse response = occupancyReportService.generate(ReportPeriod.MES);
 
         // Assert
-        assertThat(response.overallOccupancyPercent()).isNotNull().isNotNaN().isZero();
+        assertThat(response.overallOccupancyPercent()).isNotNaN().isZero();
     }
 
     // ------------------------------------------------------------------------------------------
@@ -291,7 +291,7 @@ class OccupancyReportIntegrationTest {
 
     private DayOccupancy dayOf(OccupancyReportResponse response, DayOfWeek day) {
         List<DayOccupancy> days = response.byDayOfWeek().stream()
-                .filter(item -> item.dayOfWeek() == day)
+                .filter(item -> item.dayOfWeek().equals(day))
                 .toList();
         assertThat(days).hasSize(1);
         return days.get(0);

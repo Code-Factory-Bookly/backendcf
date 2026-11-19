@@ -3,6 +3,7 @@ package com.bookly.backendcf.report.domain.model;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +21,7 @@ public final class OccupancyCalculator {
         Map<UUID, Long> result = new HashMap<>();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             for (WeeklyWindow window : windows) {
-                if (window.dayOfWeek() == date.getDayOfWeek()) {
+                if (window.dayOfWeek().equals(date.getDayOfWeek())) {
                     result.merge(window.professionalId(), windowMinutes(window), Long::sum);
                 }
             }
@@ -33,7 +34,7 @@ public final class OccupancyCalculator {
         Map<DayOfWeek, Long> result = emptyDays();
         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
             for (WeeklyWindow window : windows) {
-                if (window.dayOfWeek() == date.getDayOfWeek()) {
+                if (window.dayOfWeek().equals(date.getDayOfWeek())) {
                     result.merge(date.getDayOfWeek(), windowMinutes(window), Long::sum);
                 }
             }
@@ -68,12 +69,36 @@ public final class OccupancyCalculator {
         return Math.min(100.0, percent);
     }
 
+    /**
+     * Minutos de una franja semanal.
+     *
+     * <p>Las franjas son horas locales de la plataforma, sin zona. Para calcular la duracion
+     * sobre instantes reales (y no sobre naive times) se anclan a la zona horaria por defecto
+     * del servidor. La franja de una semana no cruza un cambio de horario, de modo que la
+     * diferencia en minutos es la misma que la de las horas locales.
+     */
     private static long windowMinutes(WeeklyWindow window) {
-        return Duration.between(window.startTime(), window.endTime()).toMinutes();
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate referenceDate = LocalDate.of(2000, 1, 1);
+        return Duration.between(
+                referenceDate.atTime(window.startTime()).atZone(zone).toInstant(),
+                referenceDate.atTime(window.endTime()).atZone(zone).toInstant()
+        ).toMinutes();
     }
 
+    /**
+     * Minutos de una reserva.
+     *
+     * <p>Misma consideracion que en {@link #windowMinutes(WeeklyWindow)}: las horas de la reserva
+     * son locales de la plataforma, y se calculan sobre instantes con zona para no depender de
+     * tiempos naive.
+     */
     private static long bookingMinutes(BookedPeriod booking) {
-        return Duration.between(booking.startTime(), booking.endTime()).toMinutes();
+        ZoneId zone = ZoneId.systemDefault();
+        return Duration.between(
+                booking.startTime().atZone(zone).toInstant(),
+                booking.endTime().atZone(zone).toInstant()
+        ).toMinutes();
     }
 
     private static Map<DayOfWeek, Long> emptyDays() {

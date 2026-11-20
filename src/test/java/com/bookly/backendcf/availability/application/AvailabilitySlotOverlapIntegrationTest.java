@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * S3-07 (MEDIA) · HU-07: la disponibilidad no debe ofrecer dos veces la misma hora de inicio.
+ * S3-07 (BAJA) · HU-07: la disponibilidad no debe ofrecer dos veces la misma hora de inicio.
  *
  * <p><b>Defecto que se reproduce.</b> {@code AvailabilityCalculator.freeSlots} recorre cada
  * {@code WorkingWindow} del dia de forma independiente y, dentro de cada franja, genera los slots
@@ -28,17 +28,27 @@ import org.springframework.boot.test.context.SpringBootTest;
  * trae seis slots: 09:00, 10:00, 11:00, <b>11:00</b>, 12:00, 13:00. El cliente ve la misma hora
  * ofrecida dos veces.
  *
+ * <p><b>Alcance real (veredicto del debugging sistematico).</b> El defecto es real en el codigo,
+ * pero <b>no hay ruta de usuario</b>: la API rechaza el solape con 409 {@code SCHEDULE_CONFLICT}
+ * antes de llegar a la base de datos, y una busqueda exhaustiva de todas las combinaciones de dos
+ * y tres franjas disjuntas no encontro ningun contraejemplo. Por eso la severidad bajo de MEDIA a
+ * <b>BAJA</b> y el bug se reporto como deuda de robustez latente, no como bug de Sprint 3. La
+ * solucion de raiz (fusionar las ventanas del dia) es la misma que resuelve S3-05.
+ *
  * <p>La causa raiz compartida es que la base de datos solo impide dos franjas que empiecen a la
  * misma hora ({@code uk_horario_semanal_inicio}); el solapamiento parcial lo permite. Es la
  * contraparte exacta de S3-05 en el modulo de disponibilidad: alli la no fusion infla la
  * capacidad, aqui la no fusion duplica la oferta.
  *
- * <p><b>S3-03 (ALTA) tambien se cubre aqui.</b> La disponibilidad consulta
+ * <p><b>S3-03 (deuda de estado) tambien se cubre aqui.</b> La disponibilidad consulta
  * {@code findOverlappingBookings}, que filtra por {@code status = 'CONFIRMADA'}, mientras que el
  * reporte de ocupacion cuenta {@code CONFIRMADA} y {@code COMPLETED}. Una reserva ya atendida
  * vuelve a aparecer como reservable: el cliente puede reservar una franja que el reporte ya
- * considera ocupada. Este caso compara el conjunto de slots con la reserva en CONFIRMADA y con la
- * misma reserva en COMPLETED, y exige que sean identicos.
+ * considera ocupada. El debugging sistematico refuto S3-03 como bug de usuario (la API solo
+ * produce CONFIRMADA y CANCELADA, y en ambos estados los dos modulos coinciden); lo que queda es
+ * la duplicacion de las listas de estados, que este caso documenta. Este caso compara el conjunto
+ * de slots con la reserva en CONFIRMADA y con la misma reserva en COMPLETED, y exige que sean
+ * identicos.
  */
 @Tag("integration")
 @SpringBootTest
@@ -67,7 +77,7 @@ class AvailabilitySlotOverlapIntegrationTest extends IntegrationTestSupport {
     }
 
     // ----------------------------------------------------------------------------------
-    // S3-07: las horas de inicio devueltas deben ser unicas.
+    // S3-07 (BAJA): las horas de inicio devueltas deben ser unicas.
     // ----------------------------------------------------------------------------------
 
     @Test
@@ -100,7 +110,7 @@ class AvailabilitySlotOverlapIntegrationTest extends IntegrationTestSupport {
     }
 
     // ----------------------------------------------------------------------------------
-    // S3-03: una reserva COMPLETED no debe reaparecer en la disponibilidad.
+    // S3-03 (deuda de estado): una reserva COMPLETED no debe reaparecer en la disponibilidad.
     // ----------------------------------------------------------------------------------
 
     @Test

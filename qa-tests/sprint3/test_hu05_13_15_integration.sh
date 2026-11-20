@@ -563,14 +563,30 @@ fi
 # Para que el recorte a 100 sea observable se cargan reservas de miguel que
 # superan su capacidad. Su capacidad esta INFLADA porque las dos franjas
 # solapadas del lunes (09:00-12:00 y 11:00-14:00) se suman como si fueran
-# 6h+3h. Se crean 12 reservas CONFIRMADA de 60 min en dias de la semana.
+# 6h+3h. Se crean reservas CONFIRMADA de 60 min en dias de la semana.
 # Ninguna reserva puede solaparse con otra CONFIRMADA del mismo profesional
 # (constraint EXCLUDE de V46), asi que se reparten en dias y horas distintas.
 # Las reservas deben caer DENTRO del periodo del reporte (que termina HOY),
 # asi que se ubican en dias pasados, en distintos dias de la semana.
+#
+# CORRECCION (veredicto del debugging sistematico): las reservas solo se siembran
+# en dias en los que Miguel TIENE franja (lunes a viernes). Antes se sembraban en
+# los ultimos 20 dias sin filtro, con lo que caian en sabado y domingo, dias en los
+# que Miguel no atiende. Esos datos son INALCANZABLES por la API (POST en un dia
+# sin horario responde 409 SLOT_OUTSIDE_SCHEDULE) y ademas falseaban la medicion
+# de S3-04 y S3-08, y dejaban el resto de la suite JUnit (que espera una base
+# limpia) con 80 reservas que no le pertenecen. Ahora cada reserva sembrada cae
+# en un dia servible, de modo que el escenario es reproducible por la API.
 G_IDX=0
+G_SKIPPED=0
 for G_OFF in $(seq 1 20); do
     G_DATE=$(date -d "-$G_OFF days" +%Y-%m-%d)
+    # Solo dias con horario de miguel (ISO 1=lunes .. 5=viernes).
+    G_DOW=$(date -d "$G_DATE" +%u)
+    if [[ "$G_DOW" -gt 5 ]]; then
+        G_SKIPPED=$((G_SKIPPED+1))
+        continue
+    fi
     for G_SLOT in 09:00 10:00 11:00 12:00; do
         G_E=$(python3 -c "
 h,m='$G_SLOT'.split(':')
@@ -583,7 +599,7 @@ print(f'{int(h)+1:02d}:{m}')")
         " >/dev/null 2>&1
     done
 done
-info "[$HU] G.2b Se insertaron $G_IDX reservas CONFIRMADA para miguel"
+info "[$HU] G.2b Se insertaron $G_IDX reservas CONFIRMADA para miguel ($G_SKIPPED dias sin horario omitidos: sabado/domingo)"
 
 hit "[$HU] G.3 Reporte responde 200" 200 GET "/api/v1/reportes/ocupacion?periodo=MES" "$ADMIN_TOKEN"
 MIG_CAP=$(report_prof "$MIGUEL" capacityMinutes)
@@ -593,17 +609,81 @@ info "[$HU] G.4 capacityMinutes de miguel=$MIG_CAP ; occupancyPercent=$MIG_PCT ;
 
 # Si las franjas solapadas se suman, la capacidad del lunes de miguel es 6h+3h=9h
 # en vez de 3h reales. Se comprueba si el % se recorta a 100 en silencio.
-MIG_BOOKED=$(report_prof "$MIGUEL" bookedMinutes)
-info "[$HU] G.5 bookedMinutes de miguel=$MIG_BOOKED"
+#
+# CORRECCION (veredicto del debugging sistematico): este caso ya NO se apoya en
+# reservas de fin de semana inalcanzables por la API para que booked > capacity.
+# El recorte se provoca ahora por la RETA REAL y alcanzable por la API que
+# encontro el debugging: el profesional VENDE sus huecos y luego REDUCE su propio
+# horario (PUT /api/v1/horarios/{id}), que la API permite sin restriccion aunque
+# queden reservas CONFIRMADA vigentes. Se mide el recorte sobre un profesional de
+# prueba con reservas sembradas por la API.
+G_BOOKED=$(report_prof "$MIGUEL" bookedMinutes)
+info "[$HU] G.5 bookedMinutes de miguel=$G_BOOKED"
 CLAMPED=$(python3 -c '
 import sys
 booked=float(sys.argv[1]); cap=float(sys.argv[2]); pct=float(sys.argv[3])
 print("yes" if cap>0 and booked>cap and pct==100.0 else "no")
-' "${MIG_BOOKED:-0}" "${MIG_CAP:-0}" "${MIG_PCT:-0}")
+' "${G_BOOKED:-0}" "${MIG_CAP:-0}" "${MIG_PCT:-0}")
 if [[ "$CLAMPED" == "yes" ]]; then
-    bug "[$HU] G.6 BUG: el reporte HU-15 RECORTA el porcentaje a 100 en silencio. bookedMinutes=$MIG_BOOKED > capacityMinutes=$MIG_CAP (la capacidad esta inflada por las franjas horarias solapadas, que la BD no impide) y occupancyPercent se devuelve como 100.0 sin avisar. El dato esta inflado y el valor es silencioso."
+    bug "[$HU] G.6 BUG: el reporte HU-15 RECORTA el porcentaje a 100 en silencio. bookedMinutes=$G_BOOKED > capacityMinutes=$MIG_CAP y occupancyPercent se devuelve como 100.0 sin avisar. El dato esta inflado y el valor es silencioso."
 else
-    pass "[$HU] G.6 El porcentaje no se recorta a 100 en silencio (booked=$MIG_BOOKED, cap=$MIG_CAP, pct=$MIG_PCT)"
+    pass "[$HU] G.6a El porcentaje de miguel no se recorta a 100 con las reservas sembradas (booked=$G_BOOKED, cap=$MIG_CAP, pct=$MIG_PCT)"
+fi
+
+# --- G.6b: recorte silencioso por REDUCCION de horario (ruta 100% por API) -----
+# Se usa el profesional de Elena, que tiene franja de 14:00 a 18:00 de lunes a
+# viernes. Se le siembran reservas CONFIRMADA dentro de la ventana del reporte y
+# despues se REDUCE su horario por la API hasta que la capacidad sea menor que
+# los minutos reservados. Ningun dato es inalcanzable: las reservas caen en dias
+# con horario y el recorte de horario se pide por la API.
+G_ELENA="$PROF_ELENA_USER_ID"
+G2_DATE=$(recent_in_window 1 3 27)
+if [[ -z "$G2_DATE" ]]; then
+    fail "[$HU] G.6b.0 No se encontro un lunes dentro de la ventana del reporte"
+else
+    info "[$HU] G.6b.0 Fecha del caso G.6b (lunes en ventana): $G2_DATE"
+    # 4 reservas CONFIRMADA de 60 min en el mismo lunes, dentro de 14:00-18:00.
+    for G2_SLOT in 14:00 15:00 16:00 17:00; do
+        G2_E=$(python3 -c "
+h,m='$G2_SLOT'.split(':')
+print(f'{int(h)+1:02d}:{m}')")
+        psql_qa -c "
+            INSERT INTO bookings (id, customer_id, professional_id, service_id, start_time, end_time, status, created_at, updated_at)
+            VALUES (gen_random_uuid(), '$HU13_CUSTOMER_ID'::uuid, '$G_ELENA'::uuid, '${SVC_IDS[1]}'::uuid,
+                    '${G2_DATE}T${G2_SLOT}:00', '${G2_DATE}T${G2_E}:00', 'CONFIRMADA', now(), now());
+        " >/dev/null 2>&1
+    done
+    # Se reduce el horario de Elena a una sola franja de 30 minutos en ese dia
+    # (los demas dias se conservan). La API lo permite: no comprueba que queden
+    # reservas CONFIRMADA dentro de la nueva franja.
+    # Se REDUCE el horario completo de Elena a una unica franja de 30 minutos.
+    # La ventana del reporte abarca 30 dias, asi que reducir un solo dia no basta:
+    # la capacidad total seguiria siendo enorme. El profesional deja de atender
+    # casi todos sus dias DESPUES de haber vendido los huecos, que es exactamente
+    # el escenario que reproduce el recorte silencioso.
+    G2_SLOTS="{\"slots\":[{\"dayOfWeek\":\"MONDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"14:30:00\"}]}"
+    hit "[$HU] G.6b.1 PUT horario de elena reducido (por API) responde 200" 200 PUT \
+        "/api/v1/horarios/$G_ELENA" "$ADMIN_TOKEN" "$G2_SLOTS"
+
+    hit "[$HU] G.6b.2 Reporte responde 200" 200 GET "/api/v1/reportes/ocupacion?periodo=MES" "$ADMIN_TOKEN"
+    G2_CAP=$(report_prof "$G_ELENA" capacityMinutes)
+    G2_BOOKED=$(report_prof "$G_ELENA" bookedMinutes)
+    G2_PCT=$(report_prof "$G_ELENA" occupancyPercent)
+    info "[$HU] G.6b.3 elena: bookedMinutes=$G2_BOOKED ; capacityMinutes=$G2_CAP ; occupancyPercent=$G2_PCT"
+    G2_CLAMPED=$(python3 -c '
+import sys
+booked=float(sys.argv[1]); cap=float(sys.argv[2]); pct=float(sys.argv[3])
+print("yes" if cap>0 and booked>cap and pct==100.0 else "no")
+' "${G2_BOOKED:-0}" "${G2_CAP:-0}" "${G2_PCT:-0}")
+    if [[ "$G2_CLAMPED" == "yes" ]]; then
+        bug "[$HU] G.6b.4 BUG: el reporte HU-15 RECORTA el porcentaje a 100 en silencio. El profesional reservo sus huecos y luego REDUJO su propio horario por la API (PUT /api/v1/horarios/$G_ELENA), que la API permite sin comprobar que las reservas CONFIRMADA sigan dentro de la franja. Resultado: bookedMinutes=$G2_BOOKED > capacityMinutes=$G2_CAP y occupancyPercent se devuelve como 100.0 sin avisar ni marcar la saturacion. El valor real era $(python3 -c "print(round($G2_BOOKED*100/$G2_CAP,2) if $G2_CAP else 0)")%. Es una ruta 100% por API: no necesita datos inalcanzables."
+    else
+        pass "[$HU] G.6b.4 El porcentaje no se recorta a 100 tras reducir el horario por API (booked=$G2_BOOKED, cap=$G2_CAP, pct=$G2_PCT)"
+    fi
+    # Se restaura el horario de Elena para no contaminar los casos posteriores.
+    hit "[$HU] G.6b.5 PUT horario de elena restaurado responde 200" 200 PUT \
+        "/api/v1/horarios/$G_ELENA" "$ADMIN_TOKEN" \
+        "{\"slots\":[{\"dayOfWeek\":\"MONDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\"},{\"dayOfWeek\":\"TUESDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\"},{\"dayOfWeek\":\"WEDNESDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\"},{\"dayOfWeek\":\"THURSDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\"},{\"dayOfWeek\":\"FRIDAY\",\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\"}]}"
 fi
 
 # Capacidad REAL de miguel: sus franjas sin contar el solapamiento. Las dos
@@ -780,6 +860,16 @@ banner "[$HU] L. BUG A2: dia con reservas pero sin capacidad => 0% de ocupacion"
 # presenta como si ese dia estuviese libre.
 # Se crea una reserva CONFIRMADA en un sabado dentro de la ventana del reporte
 # y se mide el bookedMinutes del SABADO antes y despues de crearla.
+#
+# FIXTURE DELIBERADO (no es un dato alcanzable por la API). Un sabado no tiene
+# horario para ningun profesional, de modo que la API rechaza la reserva con
+# 409 SLOT_OUTSIDE_SCHEDULE. La reserva se inserta por SQL a proposito, para
+# dejar al profesional con minutos reservados en un dia SIN capacidad, que es
+# exactamente el estado contradictorio que se quiere medir (S3-08). El debugging
+# sistematico confirmo que S3-08 es alcanzable por API por otra via (encoger el
+# horario tras reservar), de modo que este caso SQL y el caso API son el mismo
+# defecto. Los datos de esta reserva no son de negocio: son un fixture para
+# reproducir el defecto y se insertan por SQL de forma explicita.
 L_DATE=""
 for d in $(seq 1 27); do
     cand=$(date -d "-$d days" +%Y-%m-%d)

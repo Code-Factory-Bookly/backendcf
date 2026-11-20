@@ -23,11 +23,19 @@ import org.springframework.dao.DataIntegrityViolationException;
 /**
  * S3-10 y S3-03 · Integridad de la agenda frente al estado {@code RESCHEDULED}.
  *
- * <p><b>S3-10 (MEDIA): una reserva {@code RESCHEDULED} puede solaparse con una CONFIRMADA.</b>
+ * <p><b>S3-10 (BAJA-MEDIA): una reserva {@code RESCHEDULED} puede solaparse con una CONFIRMADA.</b>
  * La restriccion de exclusion {@code booking_no_overlapping_confirmed} de la migracion
  * {@code V46} declara el predicado {@code WHERE (status = 'CONFIRMADA')}, y nada mas. Una reserva
  * reprogramada queda fuera de la restriccion, de modo que dos reservas pueden ocupar fisicamente
  * la misma franja: el profesional recibe dos citas para el mismo horario.
+ *
+ * <p><b>Alcance real (veredicto del debugging sistematico).</b> No hay ruta de usuario: ningun
+ * endpoint ni servicio del alcance actual pone una reserva en estado {@code RESCHEDULED}, y la
+ * API solo produce {@code CONFIRMADA} y {@code CANCELADA}. El defecto real es que la
+ * reprogramacion es una <b>vertical cortada</b>: existe el evento, el tipo de notificacion, la
+ * plantilla y el manejador del correo, pero no existe el productor. Por eso la severidad bajo de
+ * MEDIA a <b>BAJA-MEDIA</b> y el bug se reporto como deuda de diseno latente. Este test documenta
+ * el comportamiento que tendra el sistema el dia que se construya el endpoint.
  *
  * <p><b>Decision de negocio asumida.</b> Este test asume que {@code RESCHEDULED} <b>ocupa
  * agenda</b>, es decir, que la reprogramacion deja la reserva en su franja original y crea otra
@@ -43,7 +51,7 @@ import org.springframework.dao.DataIntegrityViolationException;
  * dejar explicita la assumption, de modo que una decision de negocio contraria se detecte como un
  * cambio de criterio y no como un fallo de codigo.
  *
- * <p><b>S3-03 (ALTA): la misma definicion de "ocupado" en todos los modulos.</b> El reporte de
+ * <p><b>S3-03 (deuda de estado): la misma definicion de "ocupado" en todos los modulos.</b> El reporte de
  * ocupacion cuenta {@code CONFIRMADA} y {@code COMPLETED}; la disponibilidad solo cuenta
  * {@code CONFIRMADA}. Una reserva atendida vuelve a ofrecerse como reservable. Este caso exige que
  * {@code RESCHEDULED} se excluya de la disponibilidad igual que {@code CONFIRMADA}.
@@ -76,7 +84,7 @@ class BookingOccupancyStatusIntegrationTest extends IntegrationTestSupport {
     }
 
     // ----------------------------------------------------------------------------------
-    // S3-10: la base de datos debe rechazar dos reservas que ocupan la misma franja
+    // S3-10 (BAJA-MEDIA): la base de datos debe rechazar dos reservas que ocupan la misma franja
     // cuando una de ellas esta RESCHEDULED.
     // ----------------------------------------------------------------------------------
 
@@ -103,7 +111,7 @@ class BookingOccupancyStatusIntegrationTest extends IntegrationTestSupport {
     }
 
     // ----------------------------------------------------------------------------------
-    // S3-03: RESCHEDULED debe excluirse de la disponibilidad igual que CONFIRMADA.
+    // S3-03 (deuda de estado): RESCHEDULED debe excluirse de la disponibilidad igual que CONFIRMADA.
     // ----------------------------------------------------------------------------------
 
     @Test

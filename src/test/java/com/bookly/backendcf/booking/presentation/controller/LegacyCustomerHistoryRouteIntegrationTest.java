@@ -29,8 +29,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * S3-06 (MEDIA) · HU-13: la ruta legacy {@code GET /api/v1/reservas/cliente/{customerId}} no pagina
- * ni deja rastro de auditoria de la lectura de datos personales de un tercero.
+ * S3-06 (MEDIA-ALTA) · HU-13: la ruta legacy {@code GET /api/v1/reservas/cliente/{customerId}} no
+ * pagina ni deja rastro de auditoria de la lectura de datos personales de un tercero.
  *
  * <p><b>Defecto que se reproduce.</b> Conviven dos endpoints para el mismo proposito con contratos
  * incompatibles:
@@ -47,6 +47,15 @@ import org.springframework.test.web.servlet.MvcResult;
  * auditoria sobre una lectura de PII de terceros. Con un historial largo la respuesta no tiene
  * limite de tamano, y sin auditoria no hay forma de demostrar quien consulto los datos personales
  * de otro cliente.
+ *
+ * <p><b>Veredicto del debugging sistematico.</b> Los tres puntos del enunciado se confirmaron: la
+ * ruta devuelve un array plano de 90 elementos (48 KB) sin metadatos, el conteo de
+ * {@code audit_log} no cambia tras la lectura, y el ADMIN recibe 403 en la ruta nueva y 200 en la
+ * vieja. La severidad subio de MEDIA a <b>MEDIA-ALTA</b> por dos motivos: el crecimiento de la
+ * respuesta es lineal y sin techo (riesgo de denegacion de servicio), y la ausencia de auditoria
+ * no es un olvido del codigo sino una <b>restriccion del esquema</b>: la tabla de auditoria tiene
+ * un CHECK que solo admite tres tipos de accion, y las tres son de escritura, de modo que anadir
+ * una accion de lectura exige una migracion.
  *
  * <p><b>Como se arma el token valido.</b> {@code JwtAuthenticationFilter} busca el {@code sub} del
  * token en {@code app_user} y usa el rol que tiene alli, no el que dice el token. Por eso las

@@ -35,10 +35,15 @@ import org.springframework.boot.test.context.SpringBootTest;
  *   <li><b>S3-04 (ALTA)</b>: {@code OccupancyCalculator.percent} recorta el resultado a 100 con
  *       {@code Math.min(100.0, percent)} de forma incondicional. Cuando los minutos reservados
  *       superan la capacidad, el administrador ve "100%" y no puede distinguir "agenda llena" de
- *       "capacidad mal calculada". El valor real era 253,85%.</li>
- *   <li><b>S3-05 (ALTA)</b>: la capacidad se calcula sumando la duracion de cada franja sin
+ *       "capacidad mal calculada". El valor real era 253,85%. El debugging sistematico confirmo
+ *       que el defecto es alcanzable por API (el profesional puede reducir su horario despues de
+ *       vender los huecos), no solo por carga directa de datos.</li>
+ *   <li><b>S3-05 (MEDIA)</b>: la capacidad se calcula sumando la duracion de cada franja sin
  *       fusionar las que se solapan. Con franjas 09:00-12:00 y 11:00-14:00 el informe dice 360
- *       minutos cuando la cobertura real es 300.</li>
+ *       minutos cuando la cobertura real es 300. El debugging sistematico bajo la severidad de
+ *       ALTA a MEDIA: la API rechaza el solape con 409, asi que no hay ruta de usuario y el
+ *       defecto es una asimetria de esquema (la tabla de horario semanal es la unica de rango
+ *       temporal sin restriccion de exclusion).</li>
  *   <li><b>S3-08 (MEDIA)</b>: un dia con reservas pero sin horario configurado
  *       ({@code capacityMinutes = 0}) reporta {@code occupancyPercent = 0.0}, que confunde
  *       "sin datos" con "cero por ciento".</li>
@@ -155,7 +160,7 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     }
 
     // ----------------------------------------------------------------------------------
-    // S3-05 (ALTA): la capacidad debe fusionar las franjas solapadas (union, no suma).
+    // S3-05 (MEDIA): la capacidad debe fusionar las franjas solapadas (union, no suma).
     // ----------------------------------------------------------------------------------
 
     @Test

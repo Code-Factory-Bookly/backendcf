@@ -40,6 +40,16 @@ import org.springframework.orm.jpa.JpaSystemException;
  * deadlock de PostgreSQL (SQLState 40P01) llega como {@link CannotAcquireLockException}, que
  * tampoco se maneja. Los dos caminos son fallos de traduccion de error, no de logica de negocio.
  *
+ * <p><b>Veredicto del debugging sistematico (dos caminos, no uno).</b> La medicion a nivel de
+ * servicio dio 10 de 10 rondas con excepcion tecnica en el perdedor (6 interbloqueos 40P01 y 4
+ * errores de persistencia 25P02) y <b>cero</b> conflictos de negocio: el servicio tampoco produce
+ * el codigo de negocio esperado, no solo la capa HTTP. El 401 que ve el cliente es un
+ * <b>sintoma</b>: es el filtro de traduccion de excepciones del framework respondiendo a una
+ * excepcion no modelada, y se elimina por separado con el manejador generico del bug S3-12. El
+ * defecto de negocio de este test (traducir la concurrencia a 409) sigue necesitando su arreglo.
+ * En la capa HTTP, la distribucion medida fue 10 respuestas 201, 8 respuestas 401 y solo 2
+ * respuestas 409 en 20 peticiones concurrentes.
+ *
  * <p><b>Como se verifica.</b> Se replica el patron de concurrencia de
  * {@code BookingConcurrencyTest}: dos hilos se sincronizan con dos {@code CountDownLatch}
  * ({@code ready} y {@code go}) para arrancar a la vez, y el ayudante {@link #attempt} devuelve la

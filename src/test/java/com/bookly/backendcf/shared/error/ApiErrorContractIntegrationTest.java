@@ -44,6 +44,13 @@ import org.springframework.test.web.servlet.MvcResult;
  * cliente que sigue la documentacion no encuentra {@code errorCode}, y no puede correlacionar el
  * error con la traza del servidor porque no hay {@code traceId}.
  *
+ * <p><b>Veredicto del debugging sistematico.</b> Confirmado: el contrato publicado declara
+ * {@code required: [errorCode, message, details, traceId, timestamp]} y declara la respuesta de
+ * {@code POST /api/v1/reservas} con ese esquema, pero la implementacion devuelve un record local
+ * de dos campos. El defecto afecta a dos codigos de error de esa ruta (409 de conflicto y 400 de
+ * validacion). La severidad se mantiene en <b>MEDIA</b>; ademas agrava el bug S3-01, porque el
+ * 401 que recibe el perdedor de la carrera tampoco lleva codigo de negocio ni detalle.
+ *
  * <p><b>Como se arma el token valido.</b> {@code JwtAuthenticationFilter} no se fia del {@code sub}
  * del token: busca la cuenta en {@code app_user} y usa su rol actual. Si la cuenta no existe, la
  * peticion queda sin autenticar y el filtro de seguridad responde 401 antes de llegar al

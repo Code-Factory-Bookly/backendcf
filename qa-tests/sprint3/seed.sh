@@ -171,10 +171,20 @@ hit "PUT horario sofia" 200 PUT "/api/v1/horarios/$PROF_SOFIA_USER_ID" "$ADMIN_T
 hit "PUT horario miguel" 200 PUT "/api/v1/horarios/$PROF_MIGUEL_USER_ID" "$ADMIN_TOKEN" "$MIGUEL_SLOTS"
 hit "PUT horario elena" 200 PUT "/api/v1/horarios/$PROF_ELENA_USER_ID" "$ADMIN_TOKEN" "$ELENA_SLOTS"
 
+# ---------------------------------------------------------------------------
+# FIXTURE DELIBERADO (no es un dato alcanzable por la API).
 # Miguel: dos franjas PARCIALMENTE SOLAPADAS el mismo dia (lunes 09:00-12:00 y
 # lunes 11:00-14:00). La API lo rechaza con SCHEDULE_CONFLICT (409) porque el
 # servicio valida el solapamiento, asi que se inserta por SQL para poder
 # comprobar si el reporte de ocupacion (HU-15) recorta el % a 100 en silencio.
+#
+# Veredicto del debugging sistematico (S3-05): el defecto es real en el codigo
+# pero NO hay ruta de usuario; es una asimetria de esquema (horario_semanal es
+# la unica tabla de rango temporal sin EXCLUDE). Por eso esta franja se conserva
+# como fixture deliberado: es el escenario de los casos E2E G (capacidad
+# inflada) y K (slots duplicados). NO debe leerse como un dato de negocio real
+# ni como evidencia de que la API permita crear el solape.
+# ---------------------------------------------------------------------------
 PSQL_SEED="docker exec -i ${DB_CONTAINER:-backendcf-db} psql -v ON_ERROR_STOP=1 -U ${DB_ROLE:-bookly_test} -d ${DB_NAME:-bookly_test}"
 OVERLAP_SLOT_ID="22222222-2222-4222-8222-000000000001"
 $PSQL_SEED -c "

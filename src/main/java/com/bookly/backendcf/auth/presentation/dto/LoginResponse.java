@@ -20,7 +20,8 @@ public record LoginResponse(
     }
 
     public static LoginResponse authenticated(JwtTokenService tokens, UserAccount account, String deviceToken) {
-        return new LoginResponse(tokens.createToken(account), "Bearer", tokens.getExpiresInSeconds(),
+        boolean mfaVerified = account.getRole() != UserRole.ADMIN || account.isMfaEnabled();
+        return new LoginResponse(tokens.createToken(account, mfaVerified), "Bearer", tokens.getExpiresInSeconds(),
                 UserSummary.from(account), false, false, null, deviceToken);
     }
 

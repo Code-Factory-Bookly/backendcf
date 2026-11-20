@@ -7,6 +7,8 @@ import com.bookly.backendcf.booking.domain.model.Booking;
 import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
+import com.bookly.backendcf.catalog.application.ServiceOfferingNotFoundException;
+import com.bookly.backendcf.catalog.infrastructure.persistence.ServiceOfferingRepository;
 import com.bookly.backendcf.resource.application.ResourceCapacityValidator;
 import com.bookly.backendcf.schedule.application.AgendaBlocks;
 import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
@@ -40,6 +42,7 @@ public class CreateBookingService {
     private final WeeklySlotRepository weeklySlotRepository;
     private final AgendaBlocks agendaBlocks;
     private final ResourceCapacityValidator resourceCapacityValidator;
+    private final ServiceOfferingRepository serviceOfferingRepository;
 
     // Constructor original: compatibilidad con pruebas anteriores.
     public CreateBookingService(
@@ -52,6 +55,7 @@ public class CreateBookingService {
                 eventPublisher,
                 weeklySlotRepository,
                 AgendaBlocks.NONE,
+                null,
                 null
         );
     }
@@ -68,12 +72,12 @@ public class CreateBookingService {
                 eventPublisher,
                 weeklySlotRepository,
                 agendaBlocks,
+                null,
                 null
         );
     }
 
-    // Constructor principal de Spring: integra HU-05 y HU-12.
-    @Autowired
+    // Constructor de compatibilidad para pruebas y consumidores existentes.
     public CreateBookingService(
             BookingRepository bookingRepository,
             BookingEventPublisher eventPublisher,
@@ -81,11 +85,32 @@ public class CreateBookingService {
             AgendaBlocks agendaBlocks,
             ResourceCapacityValidator resourceCapacityValidator
     ) {
+        this(
+                bookingRepository,
+                eventPublisher,
+                weeklySlotRepository,
+                agendaBlocks,
+                resourceCapacityValidator,
+                null
+        );
+    }
+
+    // Constructor principal de Spring: integra HU-05, HU-12 y el precio histórico.
+    @Autowired
+    public CreateBookingService(
+            BookingRepository bookingRepository,
+            BookingEventPublisher eventPublisher,
+            WeeklySlotRepository weeklySlotRepository,
+            AgendaBlocks agendaBlocks,
+            ResourceCapacityValidator resourceCapacityValidator,
+            ServiceOfferingRepository serviceOfferingRepository
+    ) {
         this.bookingRepository = bookingRepository;
         this.eventPublisher = eventPublisher;
         this.weeklySlotRepository = weeklySlotRepository;
         this.agendaBlocks = agendaBlocks;
         this.resourceCapacityValidator = resourceCapacityValidator;
+        this.serviceOfferingRepository = serviceOfferingRepository;
     }
 
     @Transactional
@@ -143,7 +168,8 @@ public class CreateBookingService {
                     professionalId,
                     serviceId,
                     startTime,
-                    endTime
+                    endTime,
+                    resolvePriceAtBooking(serviceId)
             );
 
             booking.setStatus(BookingStatus.CONFIRMADA);
@@ -179,6 +205,15 @@ public class CreateBookingService {
             // Una disputa por bloqueos puede impedir confirmar la reserva.
             throw slotOccupied();
         }
+    }
+
+    private java.math.BigDecimal resolvePriceAtBooking(UUID serviceId) {
+        if (serviceOfferingRepository == null) {
+            return null;
+        }
+        return serviceOfferingRepository.findById(serviceId)
+                .orElseThrow(() -> new ServiceOfferingNotFoundException(serviceId))
+                .getPrice();
     }
 
     private BookingConflictException slotOccupied() {

@@ -410,3 +410,18 @@ El secreto TOTP se cifra con `MFA_ENCRYPTION_KEY` (AES-256) antes de persistirse
 ```
 
 Ejecutado localmente contra H2 (sin la base PostgreSQL de integración que usa el CI para las pruebas de concurrencia e integración real): **303 pruebas, 0 fallos, 0 errores**, incluidas `WeeklyScheduleServiceTest`, `ScheduleControllerSecurityTest`, `RoleAssignmentServiceTest`, `UserRoleControllerSecurityTest`, `CreateBookingServiceTest`, `BookingControllerTest`, `CancelBookingServiceTest`, `CancelBookingControllerTest`, `CancelBookingSecurityTest`, `BookingQuerySecurityTest`, `MfaServiceTest` y `MfaSettingsControllerSecurityTest`. Las cuatro clases que exigen PostgreSQL real en `localhost:55432` (`AvailabilityIntegrationTest` y las tres de `booking` de concurrencia/integración) y el reporte de cobertura consolidado quedan a cargo del pipeline de CI, que sí tiene ese Postgres disponible.
+
+## 18. HU-16 — Reporte general de uso de la plataforma
+
+La implementación de producción queda en la rama `feature/hu-16-reporte-general-uso`. Según la opción 1
+acordada con Calidad, la rama se entrega sin agregar una suite automatizada nueva por parte del desarrollo;
+Calidad debe incorporar y validar las pruebas sobre esta misma rama.
+
+| Criterio | Evidencia esperada de Calidad | Estado |
+|---|---|---|
+| Reservas, cancelaciones promedio, ingresos y recursos | `GeneralReportService` y consultas agregadas PostgreSQL | Pendiente de validar |
+| Periodos SEMANA/MES y cero registros | `GeneralReportController` y respuesta con ceros | Pendiente de validar |
+| Precio histórico | Migración `V65__add_booking_price_snapshot.sql` | Pendiente de validar |
+| ADMIN con MFA y sesión de 15 minutos | `REPORT_MFA_VERIFIED` y `ReportSessionActivity` | Pendiente de validar |
+| Auditoría e inmutabilidad | Acción `REPORT_VIEWED`, migración `V67` y `audit_log` append-only | Pendiente de validar |
+| Rendimiento | `docs/evidencia/HU-16-rendimiento.sql` y migración `V66` | Pendiente de validar |

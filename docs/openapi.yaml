@@ -650,6 +650,32 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
+  /reportes/general:
+    get:
+      tags: [Reports]
+      summary: Reporte general de uso de la plataforma
+      description: >-
+        Devuelve las reservas totales, cancelaciones promedio por día, ingresos reconocidos y uso de
+        recursos para el periodo solicitado. Solo ADMIN con una sesión autenticada mediante MFA. El precio
+        histórico de la reserva se usa para ingresos; las reservas antiguas sin snapshot usan el precio actual
+        como compatibilidad de datos. Las consultas se registran en la auditoría append-only.
+      operationId: getGeneralUsageReport
+      security: [ { bearerAuth: [ ] } ]
+      parameters:
+        - name: periodo
+          in: query
+          required: false
+          description: Periodo del reporte. Por defecto MES.
+          schema: { type: string, enum: [SEMANA, MES], default: MES }
+      responses:
+        '200':
+          description: Métricas generales del periodo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GeneralUsageReportResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
   /reservas:
     post:
       tags: [Reservas]
@@ -1019,6 +1045,27 @@ components:
         bookedMinutes: { type: integer, format: int64, minimum: 0 }
         capacityMinutes: { type: integer, format: int64, minimum: 0 }
         occupancyPercent: { type: number, format: double, minimum: 0, maximum: 100 }
+    GeneralUsageReportResponse:
+      type: object
+      properties:
+        period: { type: string, enum: [SEMANA, MES] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        totalReservations: { type: integer, format: int64, minimum: 0 }
+        cancelledReservations: { type: integer, format: int64, minimum: 0 }
+        averageCancellationsPerDay: { type: number, format: double, minimum: 0 }
+        recognizedRevenue: { type: number, format: double, minimum: 0 }
+        resourceUsage:
+          type: array
+          items: { $ref: '#/components/schemas/GeneralResourceUsage' }
+        message: { type: string, nullable: true }
+    GeneralResourceUsage:
+      type: object
+      properties:
+        resourceId: { type: string, format: uuid }
+        resourceName: { type: string }
+        totalQuantity: { type: integer, minimum: 1 }
+        bookingsUsingResource: { type: integer, format: int64, minimum: 0 }
     AuditLogPageResponse:
       type: object
       properties:
@@ -1034,8 +1081,8 @@ components:
       properties:
         id: { type: string, format: uuid }
         actorUserId: { type: string, format: uuid }
-        actionType: { type: string, enum: [BOOKING_CREATED, BOOKING_CANCELLED, ROLE_CHANGED] }
-        resourceType: { type: string, enum: [BOOKING, USER] }
+        actionType: { type: string, enum: [BOOKING_CREATED, BOOKING_CANCELLED, ROLE_CHANGED, REPORT_VIEWED] }
+        resourceType: { type: string, enum: [BOOKING, USER, REPORT] }
         resourceId: { type: string, format: uuid, nullable: true }
         occurredAt: { type: string, format: date-time }
         sourceIp: { type: string, nullable: true }

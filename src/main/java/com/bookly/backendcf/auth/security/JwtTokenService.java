@@ -54,17 +54,24 @@ public class JwtTokenService {
     public long getExpiresInSeconds() { return expiresInSeconds; }
 
     public String createToken(UserAccount account) {
-        return issue(account, expiresInSeconds, null);
+        return createToken(account, false);
+    }
+
+    public String createToken(UserAccount account, boolean mfaVerified) {
+        return issue(account, expiresInSeconds, null, mfaVerified);
     }
 
     public String createMfaPendingToken(UserAccount account) {
-        return issue(account, MFA_PENDING_SECONDS, MFA_PENDING_TYPE);
+        return issue(account, MFA_PENDING_SECONDS, MFA_PENDING_TYPE, false);
     }
 
     public TokenClaims parse(String token) {
         Claims claims = verifiedClaims(token);
         if (claims == null || MFA_PENDING_TYPE.equals(claims.get(TYPE_CLAIM, String.class))) return null;
-        return new TokenClaims(claims.getSubject(), claims.get("role", String.class));
+        return new TokenClaims(
+                claims.getSubject(),
+                claims.get("role", String.class),
+                Boolean.TRUE.equals(claims.get("mfa_verified", Boolean.class)));
     }
 
     public Optional<UUID> parseMfaPending(String token) {
@@ -79,7 +86,7 @@ public class JwtTokenService {
         }
     }
 
-    private String issue(UserAccount account, long ttlSeconds, String mfaType) {
+    private String issue(UserAccount account, long ttlSeconds, String mfaType, boolean mfaVerified) {
         Instant now = Instant.now();
         var builder = Jwts.builder()
                 .subject(account.getId().toString())
@@ -89,6 +96,9 @@ public class JwtTokenService {
                 .expiration(Date.from(now.plusSeconds(ttlSeconds)));
         if (mfaType != null) {
             builder.claim(TYPE_CLAIM, mfaType);
+        }
+        if (mfaVerified) {
+            builder.claim("mfa_verified", true);
         }
         return builder.signWith(key, Jwts.SIG.HS256).compact();
     }
@@ -102,5 +112,5 @@ public class JwtTokenService {
         }
     }
 
-    public record TokenClaims(String subject, String role) { }
+    public record TokenClaims(String subject, String role, boolean mfaVerified) { }
 }

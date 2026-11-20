@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,6 +70,32 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             "AND b.startTime >= :from AND b.startTime < :to")
     List<Booking> findByStatusesInRange(
             @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.startTime >= :from AND b.startTime < :to")
+    long countReservationsInRange(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    @Query("SELECT COUNT(b) FROM Booking b " +
+            "WHERE b.status = com.bookly.backendcf.booking.domain.model.BookingStatus.CANCELADA " +
+            "AND b.startTime >= :from AND b.startTime < :to")
+    long countCancelledReservationsInRange(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    @Query("SELECT COALESCE(SUM(COALESCE(b.priceAtBooking, s.price)), 0) " +
+            "FROM Booking b JOIN ServiceOffering s ON s.id = b.serviceId " +
+            "WHERE b.status IN " +
+            "(com.bookly.backendcf.booking.domain.model.BookingStatus.CONFIRMADA, " +
+            "com.bookly.backendcf.booking.domain.model.BookingStatus.COMPLETED) " +
+            "AND b.startTime >= :from AND b.startTime < :to")
+    BigDecimal sumRecognizedRevenueInRange(
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to
     );

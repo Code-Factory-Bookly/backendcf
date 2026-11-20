@@ -4,5 +4,6 @@ package com.bookly.backendcf.audit.domain.model;
 public enum AuditActionType {
     BOOKING_CREATED,
     BOOKING_CANCELLED,
-    ROLE_CHANGED
+    ROLE_CHANGED,
+    REPORT_VIEWED
 }

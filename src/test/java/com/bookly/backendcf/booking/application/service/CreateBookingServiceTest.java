@@ -62,7 +62,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldCreateBookingSuccessfully() {
         LocalDateTime startTime =
-                LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+                mananaEnHora(10);
         LocalDateTime endTime =
                 startTime.plusMinutes(45);
 
@@ -108,7 +108,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldRejectIfStartTimeAfterEndTime() {
         LocalDateTime startTime =
-                LocalDateTime.now().plusDays(2);
+                mananaEnHora(10);
         LocalDateTime endTime =
                 startTime.minusMinutes(30);
 
@@ -135,7 +135,7 @@ class CreateBookingServiceTest {
                         professionalId,
                         serviceId,
                         null,
-                        LocalDateTime.now().plusDays(1)
+                        mananaEnHora(10)
                 )
         );
 
@@ -150,7 +150,7 @@ class CreateBookingServiceTest {
                         customerId,
                         professionalId,
                         serviceId,
-                        LocalDateTime.now().plusDays(1),
+                        mananaEnHora(10),
                         null
                 )
         );
@@ -161,7 +161,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldRejectIfStartTimeInPast() {
         LocalDateTime startTime =
-                LocalDateTime.now().minusDays(1);
+                ayerEnHora(10);
         LocalDateTime endTime =
                 startTime.plusMinutes(45);
 
@@ -182,7 +182,7 @@ class CreateBookingServiceTest {
     @Test
     void shouldRejectIfSlotOccupied() {
         LocalDateTime startTime =
-                LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+                mananaEnHora(10);
         LocalDateTime endTime =
                 startTime.plusMinutes(45);
 
@@ -220,12 +220,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldRejectBookingOutsideProfessionalSchedule() {
-        LocalDateTime startTime = LocalDateTime.now()
-                .plusDays(1)
-                .withHour(15)
-                .withMinute(0)
-                .withSecond(0)
-                .withNano(0);
+        LocalDateTime startTime = mananaEnHora(15);
         LocalDateTime endTime = startTime.plusHours(1);
 
         when(weeklySlotRepository
@@ -256,12 +251,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldAcceptBookingContainedInProfessionalSchedule() {
-        LocalDateTime startTime = LocalDateTime.now()
-                .plusDays(1)
-                .withHour(10)
-                .withMinute(0)
-                .withSecond(0)
-                .withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusHours(1);
 
         stubScheduleContaining(startTime, endTime);
@@ -293,7 +283,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateOverlapConstraintViolationToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -317,7 +307,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateUniqueConstraintViolationToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -345,7 +335,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldTranslateDeadlockToSlotOccupied() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusMinutes(45);
 
         when(bookingRepository.findOverlappingBookings(
@@ -367,7 +357,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldPropagateUnrelatedIntegrityViolation() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusMinutes(45);
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException("foreign key violation");
@@ -392,7 +382,7 @@ class CreateBookingServiceTest {
 
     @Test
     void shouldPropagateViolationFromAnotherConstraint() {
-        LocalDateTime startTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startTime = mananaEnHora(10);
         LocalDateTime endTime = startTime.plusMinutes(45);
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException(
@@ -420,6 +410,39 @@ class CreateBookingServiceTest {
                         )
                 )
         );
+    }
+
+    /**
+     * Manana a una hora fija (10:00:00.000000000).
+     *
+     * <p>La hora se ancla para que la franja del profesional stubbeada
+     * ({@code inicio - 1h} .. {@code fin + 1h}) nunca cruce la medianoche. Si lo hiciera,
+     * la hora de fin quedaria ANTES que la de inicio y el horario se rechazaria como
+     * SLOT_OUTSIDE_SCHEDULE en lugar de disparar el error que cada caso quiere verificar.
+     */
+    private static LocalDateTime mananaEnHora(int hora) {
+        return LocalDateTime.now()
+                .plusDays(1)
+                .withHour(hora)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+    }
+
+    /**
+     * Ayer a una hora fija (10:00:00.000000000).
+     *
+     * <p>La hora se ancla por el mismo motivo que en {@link #mananaEnHora(int)}: una
+     * fecha en el pasado solo necesita caer antes que "ahora" para ser rechazada,
+     * pero anclar la hora evita depender del momento exacto en que corre la suite.
+     */
+    private static LocalDateTime ayerEnHora(int hora) {
+        return LocalDateTime.now()
+                .minusDays(1)
+                .withHour(hora)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
     }
 
     private void stubScheduleContaining(

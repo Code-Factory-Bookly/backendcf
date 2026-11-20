@@ -135,6 +135,10 @@ public class SecurityConfiguration {
                                 HttpMethod.GET,
                                 "/api/v1/disponibilidad"
                         ).hasRole("CUSTOMER")
+                        // HU-15: reportes de ocupación, solo administradores.
+                        .requestMatchers(
+                                "/api/v1/reportes/**"
+                        ).hasRole("ADMIN")
 
                         .anyRequest().authenticated()
                 )

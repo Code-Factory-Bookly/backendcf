@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.bookly.backendcf.booking.domain.model.BookingStatus;
+import java.util.Collection;
+
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
@@ -39,7 +42,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdForUpdate(
             @Param("bookingId") UUID bookingId
     );
-
     // HU-12: cuenta las reservas confirmadas que utilizan un
     // recurso fisico durante un intervalo determinado.
     // Incluye reservas de todos los profesionales.
@@ -60,5 +62,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("resourceId") UUID resourceId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
+    );
+
+        // HU-15: reservas que ocupan agenda dentro de [from, to), usadas por el reporte de ocupacion.
+    @Query("SELECT b FROM Booking b WHERE b.status IN :statuses " +
+            "AND b.startTime >= :from AND b.startTime < :to")
+    List<Booking> findByStatusesInRange(
+            @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
     );
 }

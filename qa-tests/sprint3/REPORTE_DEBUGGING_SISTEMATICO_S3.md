@@ -1,10 +1,23 @@
-# Sprint 3 — Debugging Sistemático de los 11 Bugs
+# Sprint 3 — Debugging Sistemático de los 16 Bugs
 
 **Fecha:** 2026-11-20
 **Rama:** `qa/sprint3-integracion`
 **Repositorio real:** `/home/mista/Escritorio/udea/2026-II/calidad-software/Proyecto-FE/backendcf` (directorio `backendcf`)
 **Método:** 4 pasos obligatorios por bug — Hipótesis → Predicción → Experimento → Veredicto.
 **Regla de oro aplicada:** si el único camino de reproducción es SQL que la API rechaza, el bug se REFORMULA o RECLASIFICA.
+
+> **Nota de consolidación (añadida el 2026-11-20).** Este documento conserva la nomenclatura original de la depuración sistemática: S3-01 a S3-16. Al consolidar el informe de defects, **seis de los dieciséis bugs se fusionaron dentro de bugs principales**, y los códigos S3-12 a S3-16 de este documento **ya no existen como bugs independientes** en el informe final. El informe final contiene **10 work items** en lugar de 16. El mapa de fusiones es el siguiente:
+>
+> | Bug original (este documento) | Bug final (`REPORTE_DETALLADO_BUGS.md`) | Motivo |
+> |---|---|---|
+> | S3-07 | **S3-06** (fusión de intervalos) | Misma causa: la falta de fusión de intervalos. Duplica la oferta de huecos e infla la capacidad. |
+> | S3-08 | **S3-04** (recorte silencioso del porcentaje) | Misma causa: el mismo cálculo que recorta el porcentaje a 100 sin avisar usa 0.0 como centinela de «capacidad cero, no calculable». Es la otra cara del recorte silencioso. |
+> | S3-10 | **S3-09** (fuente única de estados ocupantes) | Misma causa: el estado ausente de los controles de ocupación es el mismo, por tercera vía. |
+> | S3-13 | **S3-05** (paginación y auditoría) | Misma causa: el guardián de acceso concede la lectura de datos de terceros sin paginar y sin rastro de auditoría. |
+> | S3-14 | **S3-03** (excepción no modelada → 401) | Mismo mecanismo: la excepción no modelada cae en el filtro de traducción y se convierte en un 401 falso. |
+> | S3-16 | **S3-04** (imputación de minutos por día) | Misma causa: la regla de imputación es implícita y no reparte entre los días que cruza. |
+>
+> Para consultar los absorbedos, busque en el informe final la subsección «Síntoma derivado» dentro del bug principal correspondiente. El bug final **S3-04** concentra dos síntomas derivados: **S3-08** (el día con reservas pero sin horario se reporta como 0 %) y **S3-16** (la reserva que cruza la medianoche). El resto del contenido técnico de este documento **no se ha modificado**: todas las mediciones, hipótesis, experimentos y veredictos son los originales.
 
 ---
 

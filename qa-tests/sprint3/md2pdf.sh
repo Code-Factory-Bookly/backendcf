@@ -60,6 +60,13 @@ h3 {
   page-break-after: avoid;
 }
 
+h4 {
+  font-size: 11.5pt;
+  font-style: italic;
+  margin: 9pt 0 4pt 0;
+  page-break-after: avoid;
+}
+
 p {
   margin: 0 0 7pt 0;
   text-align: justify;

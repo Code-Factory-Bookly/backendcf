@@ -8,11 +8,14 @@ import com.bookly.backendcf.catalog.domain.model.ServiceOffering;
 import com.bookly.backendcf.catalog.domain.model.ServiceStatus;
 import com.bookly.backendcf.catalog.infrastructure.persistence.ServiceOfferingRepository;
 import com.bookly.backendcf.professional.infrastructure.persistence.ProfessionalRepository;
+import com.bookly.backendcf.schedule.application.AgendaBlocks;
 import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Adaptador que conecta el puerto de disponibilidad con los repositorios de los demás módulos. */
@@ -23,16 +26,28 @@ public class AvailabilityQueryAdapter implements AvailabilityQuery {
     private final ServiceOfferingRepository serviceRepository;
     private final WeeklySlotRepository weeklySlotRepository;
     private final BookingRepository bookingRepository;
+    private final AgendaBlocks agendaBlocks;
 
     public AvailabilityQueryAdapter(
             ProfessionalRepository professionalRepository,
             ServiceOfferingRepository serviceRepository,
             WeeklySlotRepository weeklySlotRepository,
             BookingRepository bookingRepository) {
+        this(professionalRepository, serviceRepository, weeklySlotRepository, bookingRepository, AgendaBlocks.NONE);
+    }
+
+    @Autowired
+    public AvailabilityQueryAdapter(
+            ProfessionalRepository professionalRepository,
+            ServiceOfferingRepository serviceRepository,
+            WeeklySlotRepository weeklySlotRepository,
+            BookingRepository bookingRepository,
+            AgendaBlocks agendaBlocks) {
         this.professionalRepository = professionalRepository;
         this.serviceRepository = serviceRepository;
         this.weeklySlotRepository = weeklySlotRepository;
         this.bookingRepository = bookingRepository;
+        this.agendaBlocks = agendaBlocks;
     }
 
     @Override
@@ -56,8 +71,11 @@ public class AvailabilityQueryAdapter implements AvailabilityQuery {
 
     @Override
     public List<BusyPeriod> findBusyPeriods(UUID professionalId, LocalDateTime from, LocalDateTime to) {
-        return bookingRepository.findOverlappingBookings(professionalId, from, to).stream()
-                .map(booking -> new BusyPeriod(booking.getStartTime(), booking.getEndTime()))
-                .toList();
+        // HU-05: un bloqueo de agenda ocupa el tiempo igual que una reserva confirmada.
+        Stream<BusyPeriod> bookings = bookingRepository.findOverlappingBookings(professionalId, from, to).stream()
+                .map(booking -> new BusyPeriod(booking.getStartTime(), booking.getEndTime()));
+        Stream<BusyPeriod> blocks = agendaBlocks.findOverlapping(professionalId, from, to).stream()
+                .map(block -> new BusyPeriod(block.startTime(), block.endTime()));
+        return Stream.concat(bookings, blocks).toList();
     }
 }

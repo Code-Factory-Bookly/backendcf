@@ -501,6 +501,82 @@ paths:
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
         '409': { $ref: '#/components/responses/ConflictError' }
+  /horarios/{professionalId}/bloqueos:
+    parameters:
+      - name: professionalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [ Schedule ]
+      summary: Listar bloqueos de agenda vigentes del profesional
+      description: >-
+        Devuelve los bloqueos que aún no terminaron, ordenados por inicio (HU-05). Solo el propio profesional
+        o un ADMIN. Errores: 401 UNAUTHORIZED, 403 ACCESS_DENIED y 404 PROFESSIONAL_NOT_FOUND.
+      operationId: listAgendaBlocks
+      security: [ { bearerAuth: [ ] } ]
+      responses:
+        '200':
+          description: Bloqueos vigentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AgendaBlockResponse' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+    post:
+      tags: [ Schedule ]
+      summary: Bloquear un rango de la agenda
+      description: >-
+        Bloquea el rango [startTime, endTime) del profesional (HU-05): la disponibilidad deja de ofrecerlo
+        y no se aceptan reservas que lo toquen (409 SLOT_BLOCKED al reservar). Rechazos: 400
+        SCHEDULE_VALIDATION_ERROR si el fin no es posterior al inicio o el inicio ya pasó; 409
+        AGENDA_BLOCK_HAS_BOOKINGS si hay reservas CONFIRMADA en el rango, con una entrada en details por cada
+        cita afectada (id de la reserva → fecha, hora, cliente y servicio); 409 AGENDA_BLOCK_OVERLAP si se
+        cruza con otro bloqueo.
+      operationId: createAgendaBlock
+      security: [ { bearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgendaBlockRequest' }
+      responses:
+        '201':
+          description: Bloqueo creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgendaBlockResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
+        '409': { $ref: '#/components/responses/ConflictError' }
+  /horarios/{professionalId}/bloqueos/{blockId}:
+    parameters:
+      - name: professionalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: blockId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [ Schedule ]
+      summary: Quitar un bloqueo de agenda
+      description: >-
+        Elimina el bloqueo y el rango vuelve a estar disponible (HU-05). Errores: 401 UNAUTHORIZED,
+        403 ACCESS_DENIED y 404 PROFESSIONAL_NOT_FOUND o AGENDA_BLOCK_NOT_FOUND.
+      operationId: deleteAgendaBlock
+      security: [ { bearerAuth: [ ] } ]
+      responses:
+        '204': { description: Bloqueo eliminado }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
   /disponibilidad:
     get:
       tags: [ Availability ]
@@ -508,7 +584,7 @@ paths:
       description: >-
         Devuelve los bloques libres de un profesional para un servicio dentro de un rango de fechas (HU-07).
         Cada bloque dura lo mismo que el servicio y se genera dentro de las franjas semanales del profesional.
-        Se excluyen los bloques que ya pasaron y los que se solapan con reservas CONFIRMADA.
+        Se excluyen los bloques que ya pasaron, los que se solapan con reservas CONFIRMADA y los que caen en un bloqueo de agenda (HU-05).
         Si no hay bloques libres responde 200 con available=false y un message que sugiere ampliar el filtro
         de fechas o elegir otro profesional. El rango máximo es de 31 días. Solo el rol CUSTOMER.
         Errores: 400 VALIDATION_ERROR, 401 UNAUTHORIZED, 404 PROFESSIONAL_NOT_FOUND o SERVICE_NOT_FOUND.
@@ -896,6 +972,22 @@ components:
         slots:
           type: array
           items: { $ref: '#/components/schemas/ScheduleSlot' }
+    AgendaBlockRequest:
+      type: object
+      required: [ startTime, endTime ]
+      properties:
+        startTime: { type: string, format: date-time, example: '2026-12-21T08:00:00' }
+        endTime: { type: string, format: date-time, example: '2026-12-26T20:00:00' }
+        reason: { type: string, maxLength: 200, example: 'Vacaciones' }
+    AgendaBlockResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        professionalId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        reason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     AvailabilityBlock:
       type: object
       properties:

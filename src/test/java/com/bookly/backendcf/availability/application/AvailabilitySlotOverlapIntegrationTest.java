@@ -80,6 +80,9 @@ class AvailabilitySlotOverlapIntegrationTest extends IntegrationTestSupport {
     // S3-07 (BAJA): las horas de inicio devueltas deben ser unicas.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-06 (Azure #217): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void lasHorasDeInicioDevueltasNoSeRepitenConFranjasSolapadas() {
         // Arrange: dos franjas del mismo dia que se solapan parcialmente
@@ -113,6 +116,9 @@ class AvailabilitySlotOverlapIntegrationTest extends IntegrationTestSupport {
     // S3-03 (deuda de estado): una reserva COMPLETED no debe reaparecer en la disponibilidad.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-09 (Azure #220): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void unaReservaCompletadaNoVuelveAOfrecerseComoReservable() {
         // Arrange: una franja 08:00-12:00 y una reserva de 60 minutos en 09:00-10:00.

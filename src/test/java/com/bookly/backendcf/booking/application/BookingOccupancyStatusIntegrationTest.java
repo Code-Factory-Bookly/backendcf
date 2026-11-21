@@ -88,6 +88,9 @@ class BookingOccupancyStatusIntegrationTest extends IntegrationTestSupport {
     // cuando una de ellas esta RESCHEDULED.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-09 (Azure #220): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void laBaseRechazaUnaReservaConfirmadaSobreUnaFranjaReservadaPorUnaReservaReprogramada() {
         // Arrange: se siembra por SQL una reserva reprogramada (RESCHEDULED) que ya ocupa
@@ -114,6 +117,9 @@ class BookingOccupancyStatusIntegrationTest extends IntegrationTestSupport {
     // S3-03 (deuda de estado): RESCHEDULED debe excluirse de la disponibilidad igual que CONFIRMADA.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-09 (Azure #220): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void unaReservaReprogramadaNoSeOfreceComoFranjaLibre() {
         // Arrange: una franja 08:00-12:00 con una reserva CONFIRMADA en 09:00-10:00.

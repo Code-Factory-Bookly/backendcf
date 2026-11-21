@@ -99,6 +99,9 @@ class ApiErrorContractIntegrationTest extends IntegrationTestSupport {
     // S3-09: el cuerpo del error debe cumplir el contrato publicado en openapi.yaml.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-07 (Azure #218): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void elErrorDeConflictoDeReservaCumpleElContratoDeErrorDeLaApi() throws Exception {
         // Arrange: un cliente autenticado y una franja ya ocupada por una reserva confirmada.

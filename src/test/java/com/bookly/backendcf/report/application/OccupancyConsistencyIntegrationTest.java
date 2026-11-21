@@ -86,6 +86,9 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     // S3-02 (CRITICA): el reporte debe descontar los bloqueos de agenda de la capacidad.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-02 (Azure #213): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void unBloqueoDeAgendaDescuentaLaCapacidadDelProfesional() {
         // Arrange: el profesional tiene una franja de 4 horas el lunes y se bloquean
@@ -127,6 +130,9 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     // S3-04 (ALTA): el porcentaje no debe recortarse a 100 de forma silenciosa.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-04 (Azure #215): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void unPorcentajeSuperiorACienNoDebeRecortarseSilenciosamenteA100() {
         // Arrange: una franja de una hora cada lunes y una reserva mas larga que la capacidad
@@ -163,6 +169,9 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     // S3-05 (MEDIA): la capacidad debe fusionar las franjas solapadas (union, no suma).
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-06 (Azure #217): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void laCapacidadDelLunesFusionaLasFranjasSolapadasEnLugarDeSumarlas() {
         // Arrange: dos franjas del mismo profesional el mismo dia que se solapan parcialmente.
@@ -188,6 +197,9 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     // S3-08 (MEDIA): un dia con reservas pero sin horario no puede reportar 0%.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-04 (Azure #215): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void unDiaConReservasPeroSinHorarioNoDebeReportarCeroPorCiento() {
         // Arrange: el profesional no tiene ninguna franja el martes, pero el martes

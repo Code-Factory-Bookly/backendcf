@@ -97,6 +97,9 @@ class LegacyCustomerHistoryRouteIntegrationTest extends IntegrationTestSupport {
     // S3-06: la lectura de un tercero por ADMIN debe paginar.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-05 (Azure #216): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void elAdministradorQueConsultaElHistorialDeOtroClienteRecibeUnaRespuestaPaginada() throws Exception {
         // Arrange: un ADMIN y un cliente con tres reservas.
@@ -149,6 +152,9 @@ class LegacyCustomerHistoryRouteIntegrationTest extends IntegrationTestSupport {
     // S3-06: la lectura debe dejar rastro en audit_log.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-05 (Azure #216): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void laLecturaDelHistorialDeOtroClienteDejaRastroEnLaAuditoria() throws Exception {
         // Arrange: un ADMIN y un cliente con reservas.

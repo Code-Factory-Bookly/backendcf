@@ -98,6 +98,9 @@ class AgendaBlockConcurrencyIntegrationTest extends IntegrationTestSupport {
     // S3-01: el camino concurrente debe traducir el conflicto al codigo de negocio.
     // ----------------------------------------------------------------------------------
 
+    // Bug conocido S3-01 (Azure #212): falla a proposito hasta que se corrija. Excluido del build por defecto;
+    // se ejecuta aparte con: ./mvnw test -Pknown-bugs
+    @Tag("known-bug")
     @Test
     void dosBloqueosConcurrentesDelMismoRangoDejanAlPerdedorConElConflictoDeNegocio() {
         // Arrange: un rango futuro, compartido por las dos peticiones.

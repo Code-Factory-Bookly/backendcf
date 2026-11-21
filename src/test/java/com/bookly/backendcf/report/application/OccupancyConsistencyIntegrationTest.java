@@ -258,7 +258,7 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
 
     /** Minutos de capacidad que aporta este profesional en cada ocurrencia del dia indicado. */
     private long capacidadDeEsteProfesionalPorDia(DayOfWeek dia) {
-        return dia == DayOfWeek.MONDAY ? 240L * ocurrenciasDelLunesEnLaVentana() : 0L;
+        return dia.equals(DayOfWeek.MONDAY) ? 240L * ocurrenciasDelLunesEnLaVentana() : 0L;
     }
 
     /** Capacidad total del dia en la base de datos, sumada sobre todos los profesionales. */
@@ -274,7 +274,7 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     private long ocurrenciasDelDiaEnLaVentana(DayOfWeek dia) {
         long ocurrencias = 0L;
         for (LocalDate fecha = hoy.minusDays(29); !fecha.isAfter(hoy); fecha = fecha.plusDays(1)) {
-            if (fecha.getDayOfWeek() == dia) {
+            if (fecha.getDayOfWeek().equals(dia)) {
                 ocurrencias++;
             }
         }
@@ -285,7 +285,7 @@ class OccupancyConsistencyIntegrationTest extends IntegrationTestSupport {
     private long ocurrenciasDelLunesEnLaVentana() {
         long ocurrencias = 0L;
         for (LocalDate fecha = hoy.minusDays(29); !fecha.isAfter(hoy); fecha = fecha.plusDays(1)) {
-            if (fecha.getDayOfWeek() == DayOfWeek.MONDAY) {
+            if (fecha.getDayOfWeek().equals(DayOfWeek.MONDAY)) {
                 ocurrencias++;
             }
         }

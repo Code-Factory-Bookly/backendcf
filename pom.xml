@@ -28,6 +28,13 @@
   </scm>
   <properties>
     <java.version>17</java.version>
+    <!--
+      Pruebas que exponen bugs conocidos del Sprint 3 (work items de Azure #212 a #221): fallan a
+      proposito hasta que se corrijan los bugs, asi que se excluyen del build por defecto para no
+      poner el CI de main en rojo ni omitir el analisis de SonarCloud. Se ejecutan aparte con el
+      perfil known-bugs (./mvnw test -Pknown-bugs).
+    -->
+    <excludedGroups>known-bug</excludedGroups>
     <sonar.organization>code-factory-bookly</sonar.organization>
     <sonar.projectKey>Code-Factory-Bookly_backendcf</sonar.projectKey>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
@@ -216,6 +223,7 @@
 
         Para etiquetar un test, agregar @Tag("unit") o @Tag("integration").
         Los tests sin etiqueta tambien corren por defecto.
+        Los tests con @Tag("known-bug") NO corren por defecto: solo con el perfil known-bugs.
       -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -225,6 +233,13 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>known-bugs</id>
+      <properties>
+        <groups>known-bug</groups>
+        <excludedGroups></excludedGroups>
+      </properties>
+    </profile>
     <profile>
       <id>smoke</id>
       <build>

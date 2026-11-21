@@ -238,6 +238,14 @@ GET /api/v1/disponibilidad?profesionalId=&servicioId=&desde=&hasta=     # CUSTOM
 
 `desde`/`hasta` son fechas (`yyyy-MM-dd`), rango máximo de 31 días. Cada bloque dura lo mismo que el servicio, se genera dentro del horario semanal del profesional (HU-04) y excluye lo que ya pasó o se solapa con una reserva `CONFIRMADA`. Si no hay bloques libres, responde `200` con `available=false` y un mensaje sugiriendo ampliar el filtro.
 
+### Reporte de ocupación (HU-15)
+
+```http
+GET /api/v1/reportes/ocupacion?periodo=MES     # ADMIN
+```
+
+`periodo` es `SEMANA` (últimos 7 días) o `MES` (últimos 30 días, valor por defecto) y no distingue mayúsculas. Devuelve el porcentaje de ocupación por día de la semana y por profesional: minutos de reservas `CONFIRMADA` y `COMPLETED` sobre la capacidad definida en el horario semanal (HU-04). Si no hay reservas en el periodo, responde `200` con todos los valores en cero. Un `periodo` desconocido responde `400`, y cualquier rol distinto de `ADMIN`, `403`.
+
 ### Reservas (HU-08, HU-09)
 
 ```http

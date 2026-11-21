@@ -513,3 +513,95 @@ desarrollo. Se verificaron la tabla, la FK, la restricción única, las restricc
 tres índices de `notification_delivery`. En una base con versiones de ramas paralelas, Flyway
 requirió validación temporal con `outOfOrder=true`; esta configuración debe formalizarse para el
 entorno local sin utilizarla como sustituto del orden correcto en producción.
+
+
+
+## 12. Sprint 3: reporte de ocupación de HU-15
+
+El Sprint 3 agrega el reporte de ocupación de las agendas para el rol `ADMIN`. El reporte no crea tablas,
+columnas ni migraciones: calcula los porcentajes en la aplicación a partir de las reservas y los horarios
+semanales que ya existen, y la base de datos es su única fuente de datos.
+
+### Datos que consume el reporte
+
+```mermaid
+erDiagram
+    APP_USER ||--o| PROFESIONALES : "tiene perfil"
+    PROFESIONALES ||--o{ HORARIO_SEMANAL : "define capacidad"
+    PROFESIONALES ||--o{ BOOKINGS : "atiende"
+    BOOKINGS {
+        UUID professional_id FK
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+        VARCHAR status
+    }
+    HORARIO_SEMANAL {
+        UUID profesional_id FK
+        VARCHAR dia_semana
+        TIME hora_inicio
+        TIME hora_fin
+    }
+```
+
+### Modelo lógico de la lectura
+
+| Tabla | Atributos usados | Uso en el reporte |
+|---|---|---|
+| `bookings` | `professional_id`, `start_time`, `end_time`, `status` | Minutos reservados; solo cuentan `CONFIRMADA` y `COMPLETED` |
+| `horario_semanal` | `profesional_id`, `dia_semana`, `hora_inicio`, `hora_fin` | Capacidad: franjas por cada día del rango |
+| `profesionales` | `id` | Lista de profesionales del reporte |
+| `app_user` | `id`, `full_name` | Nombre del profesional |
+
+### Modelo físico e índices
+
+El reporte no requiere una migración. La consulta principal filtra `bookings` por estado y por rango de
+`start_time`, y la cubre el índice creado en `V30`:
+
+| Índice | Consulta soportada |
+|---|---|
+| `idx_bookings_start_time` | Reservas del periodo del reporte (rango de `start_time`) |
+| `pk_app_user` | Nombres de profesionales por id |
+
+`horario_semanal` y `profesionales` son tablas pequeñas que se leen completas, por lo que no necesitan
+índices adicionales.
+
+### Consultas de referencia de HU-15
+
+La aplicación lee los datos con Spring Data JPA y calcula los porcentajes en Java. Estas consultas son el
+equivalente en SQL y están en `docs/evidencia/HU-15-consultas.sql`:
+
+```sql
+-- Minutos reservados por profesional en el periodo
+SELECT b.professional_id,
+       SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) AS minutos_reservados
+FROM bookings b
+WHERE b.status IN ('CONFIRMADA', 'COMPLETED')
+  AND b.start_time >= :desde AND b.start_time < :hasta
+GROUP BY b.professional_id;
+
+-- Minutos reservados por día de la semana (1 = lunes ... 7 = domingo)
+SELECT EXTRACT(ISODOW FROM b.start_time) AS dia_semana,
+       SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) AS minutos_reservados
+FROM bookings b
+WHERE b.status IN ('CONFIRMADA', 'COMPLETED')
+  AND b.start_time >= :desde AND b.start_time < :hasta
+GROUP BY EXTRACT(ISODOW FROM b.start_time);
+
+-- Minutos de franja semanal por profesional y día
+SELECT h.profesional_id, h.dia_semana,
+       SUM(EXTRACT(EPOCH FROM (h.hora_fin - h.hora_inicio)) / 60) AS minutos_franja
+FROM horario_semanal h
+GROUP BY h.profesional_id, h.dia_semana;
+```
+
+### Verificación realizada
+
+Se validó el rendimiento (ISO/IEC 25010, eficiencia de desempeño) con 200.000 reservas de prueba repartidas
+entre 20 profesionales. La consulta del periodo `MES` usa un `Bitmap Index Scan` sobre
+`idx_bookings_start_time` y responde en 16 ms. El script corre dentro de una transacción que termina en
+`ROLLBACK`, por lo que no deja datos en la base:
+
+```powershell
+docker cp docs/evidencia/HU-15-rendimiento.sql backendcf-db:/tmp/hu15.sql
+docker exec backendcf-db psql -U backendcf -d backendcf -f /tmp/hu15.sql
+```

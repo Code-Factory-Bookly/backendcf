@@ -56,3 +56,32 @@ qa-tests/**/seed.env
 qa-tests/**/*.log
 qa-tests/**/*.body
 qa-tests/**/*.code
+
+# =============================================================================
+# Configuracion local de Docker — no se versiona
+# =============================================================================
+# El equipo ajusta docker-compose.yml para sus puertos y sus origenes CORS
+# (frontend web, APK de Capacitor, emulador de Android). Cada maquina tiene
+# sus propios puertos libres, asi que el archivo se ignora: cada quien mantiene
+# el suyo y el de HEAD sigue siendo la version de referencia del equipo.
+docker-compose.yml
+docker-compose.*.yml
+docker-compose.local.yml
+**/docker-compose.override.yml
+
+# =============================================================================
+# Pruebas E2E de QA — material de trabajo, NO se versiona
+# =============================================================================
+# La carpeta qa-tests/ completa se ignora: ahi vive el material de
+# trabajo de QA (scripts de aceptacion, scripts de seguridad, reportes,
+# gherkin, PDFs) que no es entregable del repositorio.
+qa-tests/
+**/qa-tests/
+
+# Artefactos de ejecucion (por si se generan fuera de qa-tests/)
+.e2e-results/
+**/.e2e-results/
+*.body
+*.code
+seed.env
+**/seed.env

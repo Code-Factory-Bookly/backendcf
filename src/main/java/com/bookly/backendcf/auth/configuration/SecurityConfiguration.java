@@ -130,6 +130,11 @@ public class SecurityConfiguration {
                                 "/api/v1/reservas/*/cancelacion"
                         ).hasAnyRole("CUSTOMER", "ADMIN")
 
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/reservas/cliente/historial"
+                        ).hasRole("CUSTOMER")
+
                         // Disponibilidad de agenda: acción del cliente (HU-07).
                         .requestMatchers(
                                 HttpMethod.GET,

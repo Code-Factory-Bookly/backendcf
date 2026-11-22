@@ -34,6 +34,7 @@ public class RegisterAuditActionService implements AuditRecorder {
         AuditResourceType expectedResource = switch (action.actionType()) {
             case BOOKING_CREATED, BOOKING_CANCELLED -> AuditResourceType.BOOKING;
             case ROLE_CHANGED -> AuditResourceType.USER;
+            case REPORT_VIEWED -> AuditResourceType.REPORT;
         };
 
         if (action.resourceType() != expectedResource) {

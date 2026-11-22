@@ -7,6 +7,9 @@ import com.bookly.backendcf.booking.domain.model.Booking;
 import com.bookly.backendcf.booking.domain.model.BookingStatus;
 import com.bookly.backendcf.booking.infrastructure.persistence.BookingRepository;
 import com.bookly.backendcf.booking.infrastructure.event.BookingEventPublisher;
+import com.bookly.backendcf.catalog.application.ServiceOfferingNotFoundException;
+import com.bookly.backendcf.catalog.infrastructure.persistence.ServiceOfferingRepository;
+import com.bookly.backendcf.resource.application.ResourceCapacityValidator;
 import com.bookly.backendcf.schedule.application.AgendaBlocks;
 import com.bookly.backendcf.schedule.infrastructure.persistence.WeeklySlotRepository;
 
@@ -24,6 +27,7 @@ import java.util.UUID;
 public class CreateBookingService {
 
     private static final String SLOT_OCCUPIED = "SLOT_OCUPADO";
+
     private static final String SLOT_OCCUPIED_MESSAGE =
             "El horario seleccionado ya no está disponible";
 
@@ -37,26 +41,76 @@ public class CreateBookingService {
     private final BookingEventPublisher eventPublisher;
     private final WeeklySlotRepository weeklySlotRepository;
     private final AgendaBlocks agendaBlocks;
+    private final ResourceCapacityValidator resourceCapacityValidator;
+    private final ServiceOfferingRepository serviceOfferingRepository;
 
+    // Constructor original: compatibilidad con pruebas anteriores.
     public CreateBookingService(
             BookingRepository bookingRepository,
             BookingEventPublisher eventPublisher,
             WeeklySlotRepository weeklySlotRepository
     ) {
-        this(bookingRepository, eventPublisher, weeklySlotRepository, AgendaBlocks.NONE);
+        this(
+                bookingRepository,
+                eventPublisher,
+                weeklySlotRepository,
+                AgendaBlocks.NONE,
+                null,
+                null
+        );
     }
 
-    @Autowired
+    // Constructor HU-05: compatibilidad con pruebas de bloqueos de agenda.
     public CreateBookingService(
             BookingRepository bookingRepository,
             BookingEventPublisher eventPublisher,
             WeeklySlotRepository weeklySlotRepository,
             AgendaBlocks agendaBlocks
     ) {
+        this(
+                bookingRepository,
+                eventPublisher,
+                weeklySlotRepository,
+                agendaBlocks,
+                null,
+                null
+        );
+    }
+
+    // Constructor de compatibilidad para pruebas y consumidores existentes.
+    public CreateBookingService(
+            BookingRepository bookingRepository,
+            BookingEventPublisher eventPublisher,
+            WeeklySlotRepository weeklySlotRepository,
+            AgendaBlocks agendaBlocks,
+            ResourceCapacityValidator resourceCapacityValidator
+    ) {
+        this(
+                bookingRepository,
+                eventPublisher,
+                weeklySlotRepository,
+                agendaBlocks,
+                resourceCapacityValidator,
+                null
+        );
+    }
+
+    // Constructor principal de Spring: integra HU-05, HU-12 y el precio histórico.
+    @Autowired
+    public CreateBookingService(
+            BookingRepository bookingRepository,
+            BookingEventPublisher eventPublisher,
+            WeeklySlotRepository weeklySlotRepository,
+            AgendaBlocks agendaBlocks,
+            ResourceCapacityValidator resourceCapacityValidator,
+            ServiceOfferingRepository serviceOfferingRepository
+    ) {
         this.bookingRepository = bookingRepository;
         this.eventPublisher = eventPublisher;
         this.weeklySlotRepository = weeklySlotRepository;
         this.agendaBlocks = agendaBlocks;
+        this.resourceCapacityValidator = resourceCapacityValidator;
+        this.serviceOfferingRepository = serviceOfferingRepository;
     }
 
     @Transactional
@@ -68,15 +122,24 @@ public class CreateBookingService {
             LocalDateTime endTime
     ) {
 
+        // Validaciones existentes.
         validateTimeRange(startTime, endTime);
         validateFutureTime(startTime);
+
         validateWithinProfessionalSchedule(
                 professionalId,
                 startTime,
                 endTime
         );
-        validateNotBlocked(professionalId, startTime, endTime);
 
+        // HU-05: comprobar bloqueos de agenda.
+        validateNotBlocked(
+                professionalId,
+                startTime,
+                endTime
+        );
+
+        // Comprobar reservas cruzadas del mismo profesional.
         List<Booking> overlapping =
                 bookingRepository.findOverlappingBookings(
                         professionalId,
@@ -89,18 +152,29 @@ public class CreateBookingService {
         }
 
         try {
+
+            // HU-12: validar capacidad fisica antes de confirmar.
+            // Se ejecuta dentro de la misma transaccion.
+            if (resourceCapacityValidator != null) {
+                resourceCapacityValidator.validate(
+                        serviceId,
+                        startTime,
+                        endTime
+                );
+            }
+
             Booking booking = new Booking(
                     customerId,
                     professionalId,
                     serviceId,
                     startTime,
-                    endTime
+                    endTime,
+                    resolvePriceAtBooking(serviceId)
             );
 
             booking.setStatus(BookingStatus.CONFIRMADA);
 
-            // Forzar INSERT y detectar errores de unicidad
-            // dentro del bloque try/catch.
+            // Forzar INSERT y detectar errores de unicidad.
             Booking saved =
                     bookingRepository.saveAndFlush(booking);
 
@@ -125,13 +199,21 @@ public class CreateBookingService {
             }
 
             throw e;
+
         } catch (CannotAcquireLockException e) {
-            // PostgreSQL puede informar un deadlock al evaluar la restricción
-            // de exclusión durante dos INSERT concurrentes. Para el cliente
-            // representa el mismo resultado funcional: el horario ya fue
-            // tomado por otra solicitud.
+
+            // Una disputa por bloqueos puede impedir confirmar la reserva.
             throw slotOccupied();
         }
+    }
+
+    private java.math.BigDecimal resolvePriceAtBooking(UUID serviceId) {
+        if (serviceOfferingRepository == null) {
+            return null;
+        }
+        return serviceOfferingRepository.findById(serviceId)
+                .orElseThrow(() -> new ServiceOfferingNotFoundException(serviceId))
+                .getPrice();
     }
 
     private BookingConflictException slotOccupied() {
@@ -144,6 +226,7 @@ public class CreateBookingService {
     private boolean isBookingConflictConstraintViolation(
             Throwable exception
     ) {
+
         Throwable current = exception;
 
         while (current != null) {
@@ -166,7 +249,8 @@ public class CreateBookingService {
 
             String message = current.getMessage();
 
-            if (message != null && containsBookingConflictConstraint(message)) {
+            if (message != null
+                    && containsBookingConflictConstraint(message)) {
                 return true;
             }
 
@@ -176,22 +260,38 @@ public class CreateBookingService {
         return false;
     }
 
-    private boolean isBookingConflictConstraint(String constraintName) {
+    private boolean isBookingConflictConstraint(
+            String constraintName
+    ) {
         return constraintName != null
-                && (constraintName.equalsIgnoreCase(BOOKING_UNIQUE_CONSTRAINT)
-                || constraintName.equalsIgnoreCase(BOOKING_OVERLAP_CONSTRAINT));
+                && (
+                constraintName.equalsIgnoreCase(
+                        BOOKING_UNIQUE_CONSTRAINT
+                )
+                || constraintName.equalsIgnoreCase(
+                        BOOKING_OVERLAP_CONSTRAINT
+                )
+        );
     }
 
-    private boolean containsBookingConflictConstraint(String message) {
-        String normalized = message.toLowerCase(java.util.Locale.ROOT);
-        return normalized.contains(BOOKING_UNIQUE_CONSTRAINT)
-                || normalized.contains(BOOKING_OVERLAP_CONSTRAINT);
+    private boolean containsBookingConflictConstraint(
+            String message
+    ) {
+        String normalized =
+                message.toLowerCase(java.util.Locale.ROOT);
+
+        return normalized.contains(
+                BOOKING_UNIQUE_CONSTRAINT
+        ) || normalized.contains(
+                BOOKING_OVERLAP_CONSTRAINT
+        );
     }
 
     private void validateTimeRange(
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
+
         if (startTime == null || endTime == null) {
             throw new IllegalArgumentException(
                     "Las fechas de inicio y fin son obligatorias"
@@ -208,6 +308,7 @@ public class CreateBookingService {
     private void validateFutureTime(
             LocalDateTime startTime
     ) {
+
         if (startTime.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException(
                     "No puedes agendar en el pasado"
@@ -215,13 +316,19 @@ public class CreateBookingService {
         }
     }
 
-    // HU-05: el profesional bloqueó ese rango (vacaciones, imprevistos).
+    // HU-05: validar bloqueos del profesional.
     private void validateNotBlocked(
             UUID professionalId,
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
-        if (!agendaBlocks.findOverlapping(professionalId, startTime, endTime).isEmpty()) {
+
+        if (!agendaBlocks.findOverlapping(
+                professionalId,
+                startTime,
+                endTime
+        ).isEmpty()) {
+
             throw new BookingConflictException(
                     "SLOT_BLOCKED",
                     "El profesional bloqueó ese horario en su agenda"
@@ -234,19 +341,29 @@ public class CreateBookingService {
             LocalDateTime startTime,
             LocalDateTime endTime
     ) {
-        boolean containedInSchedule = startTime.toLocalDate()
-                .equals(endTime.toLocalDate())
+
+        boolean containedInSchedule =
+                startTime.toLocalDate()
+                        .equals(endTime.toLocalDate())
+
                 && weeklySlotRepository
-                .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
-                        professionalId
-                )
-                .stream()
-                .filter(slot -> slot.getDayOfWeek()
-                        .equals(startTime.getDayOfWeek()))
-                .anyMatch(slot -> !startTime.toLocalTime()
-                        .isBefore(slot.getStartTime())
-                        && !endTime.toLocalTime()
-                        .isAfter(slot.getEndTime()));
+                        .findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(
+                                professionalId
+                        )
+                        .stream()
+
+                        .filter(slot ->
+                                slot.getDayOfWeek()
+                                        .equals(startTime.getDayOfWeek())
+                        )
+
+                        .anyMatch(slot ->
+                                !startTime.toLocalTime()
+                                        .isBefore(slot.getStartTime())
+
+                                && !endTime.toLocalTime()
+                                        .isAfter(slot.getEndTime())
+                        );
 
         if (!containedInSchedule) {
             throw new BookingConflictException(

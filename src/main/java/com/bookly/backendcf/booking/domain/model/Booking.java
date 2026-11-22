@@ -1,6 +1,7 @@
 package com.bookly.backendcf.booking.domain.model;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -19,6 +20,9 @@ public class Booking {
 
     @Column(nullable = false)
     private UUID serviceId;
+
+    @Column(name = "price_at_booking", precision = 12, scale = 2)
+    private BigDecimal priceAtBooking;
 
     @Column(nullable = false)
     private LocalDateTime startTime;
@@ -45,9 +49,16 @@ public class Booking {
     public Booking() {}
 
     public Booking(UUID customerId, UUID professionalId, UUID serviceId, LocalDateTime startTime, LocalDateTime endTime) {
+        this(customerId, professionalId, serviceId, startTime, endTime, null);
+    }
+
+    public Booking(UUID customerId, UUID professionalId, UUID serviceId,
+                   LocalDateTime startTime, LocalDateTime endTime,
+                   BigDecimal priceAtBooking) {
         this.customerId = customerId;
         this.professionalId = professionalId;
         this.serviceId = serviceId;
+        this.priceAtBooking = priceAtBooking;
         this.startTime = startTime;
         this.endTime = endTime;
         this.status = BookingStatus.CONFIRMADA;
@@ -59,6 +70,7 @@ public class Booking {
     public UUID getCustomerId() { return customerId; }
     public UUID getProfessionalId() { return professionalId; }
     public UUID getServiceId() { return serviceId; }
+    public BigDecimal getPriceAtBooking() { return priceAtBooking; }
     public LocalDateTime getStartTime() { return startTime; }
     public LocalDateTime getEndTime() { return endTime; }
     public BookingStatus getStatus() { return status; }

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -40,9 +41,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     UUID subject = UUID.fromString(claims.subject());
                     UserAccount account = accountRepository.findById(subject).orElse(null);
                     if (account != null && account.isEnabled() && !account.isLocked(OffsetDateTime.now())) {
+                        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + account.getRole()));
+                        if (account.getRole().name().equals("ADMIN") && claims.mfaVerified()) {
+                            authorities.add(new SimpleGrantedAuthority("REPORT_MFA_VERIFIED"));
+                        }
                         var authentication = new UsernamePasswordAuthenticationToken(
-                                claims.subject(), null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + account.getRole())));
+                                claims.subject(), null, authorities);
+                        authentication.setDetails(header.substring(7));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                     }
                 } catch (IllegalArgumentException ignored) { }

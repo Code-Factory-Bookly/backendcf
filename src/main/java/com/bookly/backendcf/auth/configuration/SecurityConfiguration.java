@@ -94,6 +94,13 @@ public class SecurityConfiguration {
                                 "/api/v1/servicios/**"
                         ).hasRole("ADMIN")
 
+                        // HU-11: administración de recursos físicos.
+                        // Solo los administradores pueden acceder.
+                        .requestMatchers(
+                                "/api/v1/recursos",
+                                "/api/v1/recursos/**"
+                        ).hasRole("ADMIN")
+
                         .requestMatchers(
                                 "/api/v1/profesionales/**"
                         ).hasRole("ADMIN")
@@ -122,14 +129,20 @@ public class SecurityConfiguration {
                                 HttpMethod.PATCH,
                                 "/api/v1/reservas/*/cancelacion"
                         ).hasAnyRole("CUSTOMER", "ADMIN")
+
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/v1/reservas/cliente/historial"
                         ).hasRole("CUSTOMER")
-                        // Disponibilidad de agenda: acción del cliente (HU-07)
+
+                        // Disponibilidad de agenda: acción del cliente (HU-07).
                         .requestMatchers(
-                                HttpMethod.GET, "/api/v1/disponibilidad"
+                                HttpMethod.GET,
+                                "/api/v1/disponibilidad"
                         ).hasRole("CUSTOMER")
+                        .requestMatchers(
+                                "/api/v1/reportes/general"
+                        ).hasAuthority("REPORT_MFA_VERIFIED")
                         // HU-15: reportes de ocupación, solo administradores.
                         .requestMatchers(
                                 "/api/v1/reportes/**"

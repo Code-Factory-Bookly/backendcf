@@ -481,3 +481,21 @@ Los defectos se identifican con códigos `BUG-`/`SEC-` (MantisBT) y con números
 | Autenticación | `97b7b6f` (SEC-006, SEC-014), `be56637` (SEC-003) | Bloqueo de login por IP, filtro de dominios desechables y rechazo de secretos JWT de baja entropía |
 
 La columna de corrección resume el título del PR o commit; el detalle de cada defecto está en el registro de defectos del equipo.
+
+## 21. HU-16 — Reporte general de uso de la plataforma
+
+La implementación de producción está en la rama `feature/hu-16-reporte-general-uso`. Calidad incorporó la suite
+automatizada sobre esa misma rama (PR #74, 42 pruebas): la suite completa de la rama pasa con PostgreSQL 16
+(628 pruebas, 0 fallos) y se comprobó que detecta 9 defectos introducidos a propósito en el código.
+
+| Criterio | Evidencia de Calidad | Estado |
+|---|---|---|
+| Reservas, cancelaciones promedio, ingresos y recursos | `GeneralReportServiceTest` (lógica) y `GeneralReportIntegrationTest` (consultas SQL contra PostgreSQL) | Validado con pruebas automatizadas |
+| Periodos SEMANA/MES y cero registros | `GeneralReportServiceTest` y `GeneralReportControllerSecurityTest` | Validado con pruebas automatizadas |
+| Precio histórico | `GeneralReportIntegrationTest` (el ingreso usa el precio guardado en la reserva, migración `V65`) | Validado con pruebas automatizadas |
+| ADMIN con MFA y sesión de 15 minutos | `GeneralReportControllerSecurityTest`, `ReportSessionActivityTest` y `GeneralReportSessionExpirationTest` | Validado con pruebas automatizadas |
+| Auditoría e inmutabilidad | `GeneralReportAuditIntegrationTest`: acción `REPORT_VIEWED`, migración `V67` y `audit_log` append-only | Validado con pruebas automatizadas |
+| Rendimiento | `docs/evidencia/HU-16-rendimiento.sql` y migración `V66` | Pendiente de validar |
+
+Los pasos manuales por API de este reporte no se han ejecutado. Los administradores que crea
+`GeneralReportAuditIntegrationTest` quedan en la base de pruebas, porque `audit_log` no permite borrar al actor.

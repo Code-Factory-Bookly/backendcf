@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,8 @@ public class AgendaBlockService {
     @Transactional
     public AgendaBlockResponse create(UUID professionalId, AgendaBlockRequest request) {
         validate(request);
+        // #212: serializa las solicitudes del mismo profesional; la segunda verá el bloqueo de la primera.
+        repository.lockProfessional(professionalId);
         LocalDateTime start = request.startTime();
         LocalDateTime end = request.endTime();
 
@@ -63,9 +66,19 @@ public class AgendaBlockService {
         try {
             String reason = request.reason() == null || request.reason().isBlank() ? null : request.reason().trim();
             return AgendaBlockResponse.from(repository.saveAndFlush(new AgendaBlock(professionalId, start, end, reason)));
-        } catch (DataIntegrityViolationException concurrentBlock) {
-            // La restricción de exclusión de V50 atrapa dos bloqueos solapados creados a la vez.
-            throw overlapsBlock(repository.findOverlapping(professionalId, start, end));
+        } catch (DataIntegrityViolationException | ConcurrencyFailureException concurrentBlock) {
+            // Respaldo: la restricción de exclusión de V50 (o un interbloqueo) rechazó un bloqueo simultáneo.
+            throw overlapsBlock(winnersOf(professionalId, start, end));
+        }
+    }
+
+    // #212: si la transacción ya quedó abortada, la consulta del bloqueo ganador falla; el conflicto
+    // sigue siendo AGENDA_BLOCK_OVERLAP, solo que sin el detalle de qué bloqueo ganó.
+    private List<AgendaBlock> winnersOf(UUID professionalId, LocalDateTime start, LocalDateTime end) {
+        try {
+            return repository.findOverlapping(professionalId, start, end);
+        } catch (RuntimeException abortedTransaction) {
+            return List.of();
         }
     }
 

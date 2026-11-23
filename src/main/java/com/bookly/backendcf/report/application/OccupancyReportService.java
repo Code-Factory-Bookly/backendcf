@@ -1,5 +1,6 @@
 package com.bookly.backendcf.report.application;
 
+import com.bookly.backendcf.report.domain.model.BlockedPeriod;
 import com.bookly.backendcf.report.domain.model.BookedPeriod;
 import com.bookly.backendcf.report.domain.model.OccupancyCalculator;
 import com.bookly.backendcf.report.domain.model.ReportPeriod;
@@ -26,46 +27,57 @@ public class OccupancyReportService {
         this.occupancyQuery = occupancyQuery;
     }
 
+    /** Ventana fija que termina hoy: los últimos 7 (SEMANA) o 30 días (MES, por defecto). */
     @Transactional(readOnly = true)
     public OccupancyReportResponse generate(ReportPeriod requestedPeriod) {
         ReportPeriod period = requestedPeriod == null ? ReportPeriod.MES : requestedPeriod;
         LocalDate to = LocalDate.now();
-        LocalDate from = to.minusDays(period.getDays() - 1L);
+        return build(period, to.minusDays(period.getDays() - 1L), to);
+    }
 
+    /** #221: rango de fechas elegido por el administrador (ambos días incluidos); el periodo va nulo. */
+    @Transactional(readOnly = true)
+    public OccupancyReportResponse generate(LocalDate from, LocalDate to) {
+        return build(null, from, to);
+    }
+
+    private OccupancyReportResponse build(ReportPeriod period, LocalDate from, LocalDate to) {
         List<BookedPeriod> bookings = occupancyQuery.findOccupyingBookings(
                 from.atStartOfDay(), to.plusDays(1).atStartOfDay());
         List<WeeklyWindow> windows = occupancyQuery.findWeeklyWindows();
+        List<BlockedPeriod> blocks = occupancyQuery.findAgendaBlocks(
+                from.atStartOfDay(), to.plusDays(1).atStartOfDay());
 
-        List<DayOccupancy> byDay = buildByDay(bookings, windows, from, to);
-        List<ProfessionalOccupancy> byProfessional = buildByProfessional(bookings, windows, from, to);
+        List<DayOccupancy> byDay = buildByDay(bookings, windows, blocks, from, to);
+        List<ProfessionalOccupancy> byProfessional = buildByProfessional(bookings, windows, blocks, from, to);
 
         long totalBooked = byDay.stream().mapToLong(DayOccupancy::bookedMinutes).sum();
         long totalCapacity = byDay.stream().mapToLong(DayOccupancy::capacityMinutes).sum();
 
         return new OccupancyReportResponse(
                 period, from, to,
-                OccupancyCalculator.percent(totalBooked, totalCapacity),
+                OccupancyCalculator.exactPercent(totalBooked, totalCapacity),
                 byDay, byProfessional);
     }
 
-    private List<DayOccupancy> buildByDay(
-            List<BookedPeriod> bookings, List<WeeklyWindow> windows, LocalDate from, LocalDate to) {
+    private List<DayOccupancy> buildByDay(List<BookedPeriod> bookings, List<WeeklyWindow> windows,
+                                          List<BlockedPeriod> blocks, LocalDate from, LocalDate to) {
         Map<DayOfWeek, Long> booked = OccupancyCalculator.bookedByDay(bookings);
-        Map<DayOfWeek, Long> capacity = OccupancyCalculator.capacityByDay(windows, from, to);
+        Map<DayOfWeek, Long> capacity = OccupancyCalculator.availableByDay(windows, blocks, from, to);
 
         return java.util.Arrays.stream(DayOfWeek.values())
                 .map(day -> new DayOccupancy(
                         day,
                         booked.get(day),
                         capacity.get(day),
-                        OccupancyCalculator.percent(booked.get(day), capacity.get(day))))
+                        OccupancyCalculator.exactPercent(booked.get(day), capacity.get(day))))
                 .toList();
     }
 
-    private List<ProfessionalOccupancy> buildByProfessional(
-            List<BookedPeriod> bookings, List<WeeklyWindow> windows, LocalDate from, LocalDate to) {
+    private List<ProfessionalOccupancy> buildByProfessional(List<BookedPeriod> bookings, List<WeeklyWindow> windows,
+                                                           List<BlockedPeriod> blocks, LocalDate from, LocalDate to) {
         Map<UUID, Long> booked = OccupancyCalculator.bookedByProfessional(bookings);
-        Map<UUID, Long> capacity = OccupancyCalculator.capacityByProfessional(windows, from, to);
+        Map<UUID, Long> capacity = OccupancyCalculator.availableByProfessional(windows, blocks, from, to);
         List<UUID> professionalIds = occupancyQuery.findProfessionalIds();
         Map<UUID, String> names = occupancyQuery.professionalNames(professionalIds);
 
@@ -78,7 +90,7 @@ public class OccupancyReportService {
                             names.getOrDefault(id, ""),
                             bookedMinutes,
                             capacityMinutes,
-                            OccupancyCalculator.percent(bookedMinutes, capacityMinutes));
+                            OccupancyCalculator.exactPercent(bookedMinutes, capacityMinutes));
                 })
                 .sorted(Comparator.comparing(ProfessionalOccupancy::professionalName))
                 .toList();

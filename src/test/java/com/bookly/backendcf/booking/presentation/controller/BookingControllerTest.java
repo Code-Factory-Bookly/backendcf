@@ -161,7 +161,7 @@ class BookingControllerTest {
         String responseBody = response.getBody().toString();
 
         assertTrue(
-                responseBody.contains("error=" + expectedError),
+                responseBody.contains("errorCode=" + expectedError),
                 "La respuesta debe incluir el código SLOT_OCUPADO"
         );
 

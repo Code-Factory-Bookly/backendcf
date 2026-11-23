@@ -170,7 +170,7 @@ class OccupancyReportServiceTest {
                 .orElseThrow();
         assertThat(diaMartes.bookedMinutes()).isEqualTo(60L);
         assertThat(diaMartes.capacityMinutes()).isZero();
-        assertThat(diaMartes.occupancyPercent()).isZero();
+        assertThat(diaMartes.occupancyPercent()).isNull();
     }
 
     // ------------------------------------------------------------------------------------------
@@ -310,8 +310,8 @@ class OccupancyReportServiceTest {
         // Act
         OccupancyReportResponse response = service.generate(ReportPeriod.MES);
 
-        // Assert
-        assertThat(response.overallOccupancyPercent()).isZero();
+        // Assert: con reservas y sin capacidad el porcentaje no es calculable (#215)
+        assertThat(response.overallOccupancyPercent()).isNull();
     }
 
     // ------------------------------------------------------------------------------------------

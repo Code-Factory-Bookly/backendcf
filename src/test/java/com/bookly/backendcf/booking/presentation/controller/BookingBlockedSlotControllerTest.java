@@ -99,7 +99,7 @@ class BookingBlockedSlotControllerTest {
                         .content(requestBody))
                 // Assert
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("SLOT_BLOCKED"));
+                .andExpect(jsonPath("$.errorCode").value("SLOT_BLOCKED"));
     }
 
     // ------------------------------------------------------------------

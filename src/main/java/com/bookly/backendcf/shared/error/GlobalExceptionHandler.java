@@ -17,11 +17,15 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -30,6 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
@@ -286,6 +292,45 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 "REGISTRATION_CONFLICT",
                 "No fue posible completar el registro porque los datos ya existen",
+                Map.of()
+        );
+    }
+
+    // #214: dos operaciones simultáneas sobre los mismos datos (bloqueo, interbloqueo). Es un conflicto
+    // esperable, no una falla del servidor: el cliente puede reintentar.
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleConcurrencyFailure(
+            ConcurrencyFailureException exception
+    ) {
+        LOG.warn("Conflicto de concurrencia: {}", exception.getMessage());
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_UPDATE",
+                "Otra operación modificó los mismos datos al mismo tiempo. Intenta de nuevo.",
+                Map.of()
+        );
+    }
+
+    // #214: red de seguridad para cualquier excepción no modelada. Las de Spring MVC (ruta inexistente,
+    // método no permitido, tipo de contenido) traen su propio estado HTTP; el resto es un 500 real.
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception) {
+        if (exception instanceof ErrorResponse errorResponse) {
+            HttpStatus status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
+            String errorCode = switch (status) {
+                case NOT_FOUND -> "NOT_FOUND";
+                case METHOD_NOT_ALLOWED -> "METHOD_NOT_ALLOWED";
+                case UNSUPPORTED_MEDIA_TYPE -> "UNSUPPORTED_MEDIA_TYPE";
+                case BAD_REQUEST -> "VALIDATION_ERROR";
+                default -> "HTTP_ERROR";
+            };
+            return buildResponse(status, errorCode, exception.getMessage(), Map.of());
+        }
+        LOG.error("Error no controlado", exception);
+        return buildResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Ocurrió un error inesperado. Si persiste, informa el traceId.",
                 Map.of()
         );
     }

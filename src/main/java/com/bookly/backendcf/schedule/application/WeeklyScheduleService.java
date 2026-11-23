@@ -39,6 +39,8 @@ public class WeeklyScheduleService {
     public ScheduleResponse replace(UUID professionalId, ScheduleRequest request) {
         requireProfessional(professionalId);
         validate(request.slots());
+        // #214: dos reemplazos simultáneos del mismo horario se atienden uno tras otro.
+        professionalRepository.lockById(professionalId);
 
         slotRepository.deleteAll(slotRepository.findByProfessionalIdOrderByDayOfWeekAscStartTimeAsc(professionalId));
         slotRepository.flush();

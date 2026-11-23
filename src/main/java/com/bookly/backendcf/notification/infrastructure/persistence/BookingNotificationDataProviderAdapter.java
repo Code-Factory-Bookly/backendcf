@@ -35,6 +35,7 @@ public class BookingNotificationDataProviderAdapter implements BookingNotificati
                 customer.getEmail(),
                 customer.getFullName(),
                 professional.getFullName(),
-                service.getName());
+                service.getName(),
+                professional.getEmail());
     }
 }

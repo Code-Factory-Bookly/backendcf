@@ -22,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NotificationService {
 
+    private static final org.slf4j.Logger LOGGER =
+            org.slf4j.LoggerFactory.getLogger(NotificationService.class);
+
+    private static final String PROFESSIONAL_CANCELLATION_SUBJECT = "Cancelación de cita en tu agenda";
+
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.ROOT);
 
@@ -81,6 +86,35 @@ public class NotificationService {
         }
 
         deliveryRepository.saveAndFlush(delivery);
+
+        notifyProfessionalOfCancellation(event, content.data());
+    }
+
+    /**
+     * HU-10 / HU-14: al cancelarse una reserva, el profesional recibe un aviso porque la cita
+     * desaparece de su agenda. No se registra como entrega: el listado de notificaciones de una
+     * reserva es visible para el cliente y expondria el correo del profesional. Un fallo aqui
+     * no debe afectar el correo del cliente ni la cancelacion, por eso solo se deja en el log.
+     */
+    private void notifyProfessionalOfCancellation(
+            BookingEvent event, BookingNotificationDataProvider.BookingNotificationData data) {
+        if (!(event instanceof BookingCancelledEvent cancelled)) {
+            return;
+        }
+        String professionalEmail = data.professionalEmail();
+        if (professionalEmail == null || professionalEmail.isBlank()) {
+            return;
+        }
+        try {
+            String body = templateRenderer.professionalCancellation(variables(data, Map.of(
+                    "dateTime", format(cancelled.getStartTime()),
+                    "cancellationReason", valueOrDefault(cancelled.getCancellationReason(), "No especificado"))));
+            emailNotificationPort.send(new EmailNotificationPort.EmailMessage(
+                    professionalEmail, PROFESSIONAL_CANCELLATION_SUBJECT, body));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("No se pudo avisar al profesional de la cancelación de la reserva {}: {}",
+                    cancelled.getBookingId(), safeErrorMessage(exception));
+        }
     }
 
     private NotificationContent contentFor(BookingEvent event) {

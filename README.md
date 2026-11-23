@@ -252,7 +252,8 @@ GET /api/v1/reportes/ocupacion?periodo=MES     # ADMIN
 POST   /api/v1/reservas                                # CUSTOMER
 PATCH  /api/v1/reservas/{id}/cancelacion                 # CUSTOMER
 GET    /api/v1/reservas/cliente/{customerId}             # el propio cliente o ADMIN
-GET    /api/v1/reservas/profesional/{professionalId}     # el propio profesional o ADMIN
+GET    /api/v1/reservas/profesional/agenda               # HU-14: PROFESSIONAL (la propia) o ADMIN (?professionalId=)
+GET    /api/v1/reservas/profesional/{professionalId}     # OBSOLETA (usar /agenda): el propio profesional o ADMIN
 ```
 
 Dos clientes no pueden quedarse con la misma franja: la base lo garantiza con una restricción única (`ADR-006`), y el perdedor de la carrera recibe `409`. Cancelar exige una anticipación mínima configurable (`BOOKING_CANCELLATION_MIN_ADVANCE_MINUTES`).

@@ -365,7 +365,7 @@ El solapamiento se valida en el servicio, no con una restricción de exclusión 
 | Reserva exitosa sobre una franja disponible | `CreateBookingServiceTest.shouldCreateBookingSuccessfully`, `BookingControllerTest.shouldCreateBookingSuccessfully/shouldUseAuthenticatedCustomerId` | Cubierto |
 | Dos clientes intentan reservar la misma franja de forma simultánea (condición de carrera) | `BookingConcurrencyTest.twoSimultaneousCustomersOnlyOneBookingIsConfirmed` (concurrencia real contra PostgreSQL), `CreateBookingServiceTest.shouldRejectIfSlotOccupied`, `BookingControllerTest.shouldReturnConflictWhenSlotIsOccupied` | Cubierto |
 | Control adicional: validación del rango horario | `CreateBookingServiceTest.shouldRejectIfStartTimeAfterEndTime/shouldRejectIfStartTimeInPast`, `BookingControllerTest.shouldReturnBadRequestForInvalidTimeRange/shouldReturnBadRequestForInvalidCustomerId` | Cubierto |
-| Control adicional: lectura de reservas por dueño (`GET /reservas/cliente/{id}`, `GET /reservas/profesional/{id}`) | `BookingQuerySecurityTest.sinTokenDevuelve401/clientePuedeVerSusPropiasReservas/clienteNoPuedeVerLasReservasDeOtroClienteDevuelve403/profesionalPuedeVerSusPropiasReservas/administradorPuedeVerLasReservasDeCualquierCliente` | Cubierto |
+| Control adicional: lectura de reservas por dueño (`GET /reservas/cliente/{id}`, `GET /reservas/profesional/{id}`, esta última obsoleta) | `BookingQuerySecurityTest.sinTokenDevuelve401/clientePuedeVerSusPropiasReservas/clienteNoPuedeVerLasReservasDeOtroClienteDevuelve403/profesionalPuedeVerSusPropiasReservas/administradorPuedeVerLasReservasDeCualquierCliente` | Cubierto |
 
 La unicidad de la franja la garantiza la base con la restricción `unique_booking_per_professional_time` (`V30__create_bookings.sql`); el servicio traduce la violación a `409 SLOT_OCUPADO` (ADR-006).
 
@@ -499,3 +499,17 @@ automatizada sobre esa misma rama (PR #74, 42 pruebas): la suite completa de la 
 
 Los pasos manuales por API de este reporte no se han ejecutado. Los administradores que crea
 `GeneralReportAuditIntegrationTest` quedan en la base de pruebas, porque `audit_log` no permite borrar al actor.
+
+## 22. HU-14 — Historial de reservas del profesional ("Mi Agenda")
+
+Diseño y decisiones: [`docs/HU-14-agenda-profesional.md`](docs/HU-14-agenda-profesional.md). La ruta antigua `GET /reservas/profesional/{id}` queda **obsoleta** (el frontend la usa; se retirará cuando migre); la reemplaza `GET /reservas/profesional/agenda`.
+
+| Escenario Gherkin | Prueba automatizada | Estado |
+|---|---|---|
+| Consultar mi agenda de atención diaria (ordenada, con hora, cliente y servicio; sin datos de otros profesionales) | `ProfessionalAgendaServiceTest` (hoy en hora de Colombia, id del token), `ProfessionalAgendaIntegrationTest` (PostgreSQL: orden, día, aislamiento entre profesionales, canceladas excluidas), `ProfessionalAgendaControllerTest` (token, `professionalId` ajeno ignorado) | Cubierto |
+| Consultar agenda en un rango de fechas ampliado | `ProfessionalAgendaServiceTest` (extremos inclusivos, rango invertido, máximo 31 días), `ProfessionalAgendaIntegrationTest.devuelveLaSemanaConsolidadaYOrdenadaSoloDelProfesional` | Cubierto |
+| Consultar mi agenda sin clientes programados | `ProfessionalAgendaServiceTest.sinReservasHoy…`, `ProfessionalAgendaIntegrationTest.sinReservasDevuelveListaVaciaYMensaje`, `ProfessionalAgendaControllerTest.sinReservasDevuelveContenidoVacioYMensajeInformativo` | Cubierto |
+| Control adicional: roles | `ProfessionalAgendaControllerTest` (sin token 401, CUSTOMER 403, ADMIN con `professionalId` 200, sin él 400, inexistente 404, ruta antigua sigue 200) | Cubierto |
+| Aviso de cancelación al profesional (HU-10) | `NotificationServiceProfessionalCancellationTest` (10 pruebas: ambos correos, fallos independientes, sin registro de entrega, sin correo) | Cubierto |
+
+**Verificación de las pruebas:** se introdujeron 11 defectos a propósito (incluir canceladas, orden invertido, sin filtro de profesional, límite superior inclusivo, "hoy" en UTC, rango máximo desplazado, CUSTOMER con acceso, administrador sin validar el profesional, administrador sin `professionalId`, profesional que usa un id ajeno, aviso al correo equivocado) y las pruebas detectaron los 11.

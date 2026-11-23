@@ -317,8 +317,7 @@ public class CreateBookingService {
             return;
         }
         serviceOfferingRepository.findById(serviceId).ifPresent(service -> {
-            long minutes = java.time.Duration.between(startTime, endTime).toMinutes();
-            if (minutes != service.getDurationMinutes()) {
+            if (!startTime.plusMinutes(service.getDurationMinutes()).equals(endTime)) {
                 throw new IllegalArgumentException(
                         "La reserva debe durar " + service.getDurationMinutes()
                                 + " minutos, igual que el servicio");

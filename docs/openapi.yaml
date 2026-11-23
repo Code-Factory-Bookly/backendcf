@@ -769,7 +769,7 @@ paths:
       tags: [Reservas]
       summary: Consultar la agenda del profesional ("Mi Agenda", HU-14)
       description: |
-        Reemplaza a `GET /reservas/profesional/{professionalId}`, que se retiró (responde 404).
+        Reemplaza a `GET /reservas/profesional/{professionalId}`, que queda **obsoleta** y se mantiene temporalmente.
         Sin fechas devuelve la agenda de hoy en hora de Colombia (GMT-5). Las reservas canceladas
         no se muestran. El listado va en orden cronológico y no está paginado: el rango máximo es de 31 días.
 
@@ -803,6 +803,32 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
         '404': { $ref: '#/components/responses/NotFoundError' }
+  /reservas/profesional/{professionalId}:
+    parameters:
+      - name: professionalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Reservas]
+      summary: Obtener todas las reservas de un profesional (obsoleta)
+      description: |
+        **Obsoleta desde HU-14.** Usar `GET /reservas/profesional/agenda`. Se mantiene temporalmente para no romper
+        a los consumidores actuales y se retirará cuando migren. No está paginada, no filtra por fecha y devuelve
+        también las reservas canceladas.
+      deprecated: true
+      operationId: getByProfessional
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de reservas del profesional
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Booking' }
+        '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
 components:
   securitySchemes:
     bearerAuth:

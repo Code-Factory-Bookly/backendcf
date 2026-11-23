@@ -72,6 +72,19 @@ class BookingQuerySecurityTest {
     }
 
     @Test
+    void profesionalPuedeVerSusPropiasReservas() throws Exception {
+        UserAccount professional = createAccount(UserRole.PROFESSIONAL);
+        String token = tokenService.createToken(professional);
+        when(bookingRepository.findByProfessionalId(professional.getId()))
+                .thenReturn(List.of(booking(UUID.randomUUID(), professional.getId())));
+
+        mockMvc.perform(get("/api/v1/reservas/profesional/{id}", professional.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].professionalId").value(professional.getId().toString()));
+    }
+
+    @Test
     void administradorPuedeVerLasReservasDeCualquierCliente() throws Exception {
         UserAccount admin = createAccount(UserRole.ADMIN);
         String token = tokenService.createToken(admin);

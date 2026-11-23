@@ -289,14 +289,15 @@ class ProfessionalAgendaControllerTest {
     }
 
     @Test
-    // Decision de negocio: la ruta antigua con identificador se retiro; Mi Agenda la reemplaza.
-    void laRutaAntiguaConIdentificadorYaNoExiste() throws Exception {
+    // La ruta antigua (obsoleta) sigue disponible porque el frontend la usa; no se confunde con la agenda.
+    void laRutaAntiguaConIdentificadorSigueDisponibleYNoUsaLaAgenda() throws Exception {
         UserAccount professional = createAccount(UserRole.PROFESSIONAL);
 
         mockMvc.perform(get("/api/v1/reservas/profesional/{id}", professional.getId())
                         .header("Authorization",
                                 "Bearer " + tokenService.createToken(professional)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
 
         verifyNoInteractions(agendaService);
     }

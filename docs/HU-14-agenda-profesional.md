@@ -10,7 +10,7 @@ Se agrega la ruta `GET /api/v1/reservas/profesional/agenda`.
 | `ADMIN` | No tiene agenda propia: debe indicar `?professionalId=<id>`. Sin él responde 400; con un profesional que no existe, 404 `PROFESSIONAL_NOT_FOUND`. |
 | `CUSTOMER` / sin token | 403 / 401. |
 
-La ruta antigua `GET /api/v1/reservas/profesional/{professionalId}` (PR #40) **se retiró**: no estaba paginada, no filtraba por fecha, devolvía también las canceladas y la agenda nueva cubre su uso (el profesional ve lo suyo; el administrador usa `?professionalId=`). Quien la consumiera recibe ahora 404 y debe migrar a `/profesional/agenda`.
+La ruta antigua `GET /api/v1/reservas/profesional/{professionalId}` (PR #40) **queda obsoleta pero sigue disponible**. No estaba paginada, no filtraba por fecha y devolvía también las canceladas, por lo que no cumple HU-14; y no se podía adaptar sin romper su respuesta (una lista no admite el mensaje de agenda libre). Se decidió retirarla, pero el frontend desplegado la usa en 4 pantallas (Hoy, Agenda, Calendario semanal y Turnos), así que se conserva hasta que migre y se retirará en un PR aparte.
 
 ## Consulta
 
@@ -74,9 +74,11 @@ Al cancelarse una reserva, además del correo al cliente, el profesional recibe 
 
 ## Migración para el frontend
 
-`GET /api/v1/reservas/profesional/{professionalId}` **ya no existe** y responde 404. La reemplaza `GET /api/v1/reservas/profesional/agenda`. El contrato está en [`docs/openapi.yaml`](openapi.yaml).
+`GET /api/v1/reservas/profesional/{professionalId}` está **obsoleta** (sigue funcionando, sin cambios). La reemplaza `GET /api/v1/reservas/profesional/agenda`. El contrato está en [`docs/openapi.yaml`](openapi.yaml).
 
-| | Antes | Ahora |
+El frontend desplegado la consume en `listByProfessional(id)` desde 4 pantallas y trata la respuesta como una lista. Al migrar hay que cambiar la lectura de la respuesta.
+
+| | Ruta obsoleta | Ruta nueva |
 |---|---|---|
 | Ruta | `/reservas/profesional/{professionalId}` | `/reservas/profesional/agenda` |
 | Quién | El propio profesional o `ADMIN` | `PROFESSIONAL` (la suya) o `ADMIN` con `?professionalId=` |
@@ -86,11 +88,12 @@ Al cancelarse una reserva, además del correo al cliente, el profesional recibe 
 | Fechas | Sin filtro | Hoy por defecto; `?from=` y `?to=` (`yyyy-MM-dd`), máximo 31 días |
 | Cada reserva | `id, customerId, professionalId, serviceId, customerName, professionalName, serviceName, startTime, endTime, status, createdAt, updatedAt, cancelledAt, cancellationReason` | `id, startTime, endTime, customerName, serviceName, status` |
 
-Qué cambiar en el cliente: apuntar a la ruta nueva, leer la lista en `content` (no en la raíz), mostrar `message` cuando `content` esté vacío, y para el administrador enviar `professionalId`. Si necesita `customerId` o los datos de cancelación, hay que pedirlo: la agenda no los expone a propósito.
+Qué cambiar en el cliente: apuntar a la ruta nueva, leer la lista en `content` (no en la raíz), mostrar `message` cuando `content` esté vacío, y para el administrador enviar `professionalId`. Si una pantalla necesita `customerId`, `serviceId` o los datos de cancelación, hay que pedirlo: la agenda no los expone a propósito. La pantalla "Turnos" hoy muestra las reservas canceladas con la etiqueta "Cancelado"; con la ruta nueva dejarían de aparecer (decisión de negocio del 22/11).
 
 ## Fuera de alcance (decidido)
 
 - Consulta de cancelaciones por usuario o por hora, y cualquier HU adicional sobre cancelaciones.
+- Retirar la ruta antigua: se hará en un PR aparte cuando el frontend migre.
 - Auditoría de las consultas del administrador a la agenda de un profesional (hoy no se registran).
 
 ## Validación para Calidad
@@ -101,5 +104,5 @@ Qué cambiar en el cliente: apuntar a la ruta nueva, leer la lista en `content` 
 4. El rango `from`–`to` es inclusivo en ambos extremos y se rechaza si está invertido o supera 31 días.
 5. Las reservas canceladas no aparecen; una franja liberada y reservada de nuevo sí.
 6. Sin reservas: `content: []` y mensaje informativo (distinto para hoy y para otro periodo).
-7. Sin token → 401; `CUSTOMER` → 403; `ADMIN` con `professionalId` → 200, sin él → 400, inexistente → 404. La ruta antigua `/profesional/{id}` → 404.
+7. Sin token → 401; `CUSTOMER` → 403; `ADMIN` con `professionalId` → 200, sin él → 400, inexistente → 404. La ruta antigua `/profesional/{id}` sigue respondiendo 200 (obsoleta).
 8. Al cancelar, el cliente y el profesional reciben su correo; si falla uno, el otro se envía igual; el profesional no queda en el listado de notificaciones.

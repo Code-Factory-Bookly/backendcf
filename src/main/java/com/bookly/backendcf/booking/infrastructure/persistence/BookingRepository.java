@@ -59,6 +59,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             Pageable pageable
     );
 
+    // Ruta antigua GET /reservas/profesional/{id}, obsoleta desde HU-14 (ver BookingController).
+    List<Booking> findByProfessionalId(UUID professionalId);
+
     // HU-14: agenda del profesional. Excluye las reservas canceladas (la cancelacion libera
     // la franja) y ordena cronologicamente; el id desempata para que el orden sea estable.
     // "from" es inclusivo y "toExclusive" exclusivo, para abarcar dias completos.

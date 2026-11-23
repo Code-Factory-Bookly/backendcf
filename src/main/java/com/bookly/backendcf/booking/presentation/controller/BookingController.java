@@ -70,6 +70,18 @@ public class BookingController {
         return withNames(bookingRepository.findByCustomerId(customerId));
     }
 
+    /**
+     * Obsoleta desde HU-14: usar {@code GET /reservas/profesional/agenda}. Se mantiene solo para
+     * no romper a los consumidores actuales (el frontend la usa); se retirara cuando migren.
+     * No esta paginada, no filtra por fecha y devuelve tambien las reservas canceladas.
+     */
+    @GetMapping("/profesional/{professionalId}")
+    public List<BookingResponse> getByProfessional(
+            @PathVariable UUID professionalId, Authentication authentication) {
+        ownershipGuard.check(professionalId, authentication);
+        return withNames(bookingRepository.findByProfessionalId(professionalId));
+    }
+
     @PostMapping
     public ResponseEntity<?> createBooking(@Valid @RequestBody CreateBookingRequest request) {
         try {

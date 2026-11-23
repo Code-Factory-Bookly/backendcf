@@ -122,9 +122,10 @@ class OccupancyQueryAdapterTest {
         // Act
         adapter.findOccupyingBookings(from, to);
 
-        // Assert: solo CONFIRMADA y COMPLETED ocupan agenda; CANCELADA no cuenta
+        // Assert: CONFIRMADA, RESCHEDULED y COMPLETED ocupan agenda (#220); CANCELADA no cuenta
         verify(bookingRepository).findByStatusesInRange(
-                eq(List.of(BookingStatus.CONFIRMADA, BookingStatus.COMPLETED)), eq(from), eq(to));
+                eq(List.of(BookingStatus.CONFIRMADA, BookingStatus.RESCHEDULED, BookingStatus.COMPLETED)),
+                eq(from), eq(to));
     }
 
     @Test

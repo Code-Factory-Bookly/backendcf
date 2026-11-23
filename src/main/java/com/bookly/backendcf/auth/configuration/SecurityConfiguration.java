@@ -75,6 +75,10 @@ public class SecurityConfiguration {
                                 "/api/v1/auth/login"
                         ).permitAll()
 
+                        // #214: la página de error de Spring no exige sesión; si la exigiera, cualquier
+                        // error del servidor llegaría al cliente como un 401 de autenticación.
+                        .requestMatchers("/error").permitAll()
+
                         .requestMatchers(
                                 "/api/v1/auth/mfa/**"
                         ).permitAll()

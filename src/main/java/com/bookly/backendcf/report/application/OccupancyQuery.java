@@ -1,5 +1,6 @@
 package com.bookly.backendcf.report.application;
 
+import com.bookly.backendcf.report.domain.model.BlockedPeriod;
 import com.bookly.backendcf.report.domain.model.BookedPeriod;
 import com.bookly.backendcf.report.domain.model.WeeklyWindow;
 import java.time.LocalDateTime;
@@ -19,6 +20,11 @@ public interface OccupancyQuery {
 
     /** Reservas CONFIRMADA o COMPLETED cuyo inicio cae en [from, to). */
     List<BookedPeriod> findOccupyingBookings(LocalDateTime from, LocalDateTime to);
+
+    /** #213: bloqueos de agenda que se cruzan con [from, to); descuentan capacidad. */
+    default List<BlockedPeriod> findAgendaBlocks(LocalDateTime from, LocalDateTime to) {
+        return List.of();
+    }
 
     /** Nombre completo de cada profesional por id. */
     Map<UUID, String> professionalNames(Collection<UUID> professionalIds);

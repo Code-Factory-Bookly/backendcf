@@ -3,6 +3,7 @@ package com.bookly.backendcf.availability.domain.model;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,10 +24,10 @@ public final class AvailabilityCalculator {
             throw new IllegalArgumentException("La duración del servicio debe ser positiva");
         }
 
-        List<WorkingWindow> dayWindows = windows.stream()
+        List<WorkingWindow> dayWindows = mergeOverlapping(windows.stream()
                 .filter(window -> date.getDayOfWeek().equals(window.dayOfWeek()))
                 .sorted(Comparator.comparing(WorkingWindow::startTime))
-                .toList();
+                .toList());
 
         List<AvailableSlot> free = new ArrayList<>();
         for (WorkingWindow window : dayWindows) {
@@ -41,6 +42,22 @@ public final class AvailabilityCalculator {
             }
         }
         return free;
+    }
+
+    // #217: dos franjas que se solapan el mismo día se tratan como una sola (su unión). Las contiguas
+    // se dejan separadas para no cambiar los huecos que ya se ofrecían.
+    private static List<WorkingWindow> mergeOverlapping(List<WorkingWindow> sorted) {
+        List<WorkingWindow> merged = new ArrayList<>();
+        for (WorkingWindow window : sorted) {
+            WorkingWindow last = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            if (last != null && window.startTime().isBefore(last.endTime())) {
+                LocalTime end = window.endTime().isAfter(last.endTime()) ? window.endTime() : last.endTime();
+                merged.set(merged.size() - 1, new WorkingWindow(last.dayOfWeek(), last.startTime(), end));
+            } else {
+                merged.add(window);
+            }
+        }
+        return merged;
     }
 
     private static boolean isFree(LocalDateTime start, LocalDateTime end, List<BusyPeriod> busyPeriods) {

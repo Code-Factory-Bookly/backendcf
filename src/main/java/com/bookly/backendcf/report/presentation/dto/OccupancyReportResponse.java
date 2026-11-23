@@ -10,7 +10,7 @@ public record OccupancyReportResponse(
         ReportPeriod period,
         LocalDate from,
         LocalDate to,
-        double overallOccupancyPercent,
+        Double overallOccupancyPercent,
         List<DayOccupancy> byDayOfWeek,
         List<ProfessionalOccupancy> byProfessional) {
 
@@ -18,7 +18,7 @@ public record OccupancyReportResponse(
             DayOfWeek dayOfWeek,
             long bookedMinutes,
             long capacityMinutes,
-            double occupancyPercent) {
+            Double occupancyPercent) {
     }
 
     public record ProfessionalOccupancy(
@@ -26,6 +26,6 @@ public record OccupancyReportResponse(
             String professionalName,
             long bookedMinutes,
             long capacityMinutes,
-            double occupancyPercent) {
+            Double occupancyPercent) {
     }
 }

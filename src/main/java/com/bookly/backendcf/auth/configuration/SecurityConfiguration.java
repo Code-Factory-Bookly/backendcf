@@ -184,7 +184,6 @@ public class SecurityConfiguration {
             throws Exception {
         http
                 .securityMatcher("/actuator/**")
-                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/actuator/health/**",

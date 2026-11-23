@@ -1,0 +1,10 @@
+Hola {{professionalName}},
+
+Una reserva de tu agenda fue cancelada y el horario quedó libre.
+
+Cliente: {{customerName}}
+Servicio: {{serviceName}}
+Fecha y hora original: {{dateTime}}
+Motivo: {{cancellationReason}}
+
+Esta cita ya no aparece en tu agenda.

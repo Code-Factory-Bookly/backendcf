@@ -70,13 +70,6 @@ public class BookingController {
         return withNames(bookingRepository.findByCustomerId(customerId));
     }
 
-    @GetMapping("/profesional/{professionalId}")
-    public List<BookingResponse> getByProfessional(
-            @PathVariable UUID professionalId, Authentication authentication) {
-        ownershipGuard.check(professionalId, authentication);
-        return withNames(bookingRepository.findByProfessionalId(professionalId));
-    }
-
     @PostMapping
     public ResponseEntity<?> createBooking(@Valid @RequestBody CreateBookingRequest request) {
         try {

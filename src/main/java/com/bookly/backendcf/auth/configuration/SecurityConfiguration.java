@@ -135,6 +135,13 @@ public class SecurityConfiguration {
                                 "/api/v1/reservas/cliente/historial"
                         ).hasRole("CUSTOMER")
 
+                        // HU-14: "Mi Agenda" del profesional; el administrador la consulta
+                        // indicando de que profesional es.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/reservas/profesional/agenda"
+                        ).hasAnyRole("PROFESSIONAL", "ADMIN")
+
                         // Disponibilidad de agenda: acción del cliente (HU-07).
                         .requestMatchers(
                                 HttpMethod.GET,

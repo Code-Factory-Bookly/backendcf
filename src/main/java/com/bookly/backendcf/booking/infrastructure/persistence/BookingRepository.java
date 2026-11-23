@@ -59,7 +59,23 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             Pageable pageable
     );
 
-    List<Booking> findByProfessionalId(UUID professionalId);
+    // HU-14: agenda del profesional. Excluye las reservas canceladas (la cancelacion libera
+    // la franja) y ordena cronologicamente; el id desempata para que el orden sea estable.
+    // "from" es inclusivo y "toExclusive" exclusivo, para abarcar dias completos.
+    // Usa el indice idx_bookings_professional_start (professional_id, start_time).
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.professionalId = :professionalId
+              AND b.startTime >= :from
+              AND b.startTime < :toExclusive
+              AND b.status <> 'CANCELADA'
+            ORDER BY b.startTime ASC, b.id ASC
+            """)
+    List<Booking> findAgenda(
+            @Param("professionalId") UUID professionalId,
+            @Param("from") LocalDateTime from,
+            @Param("toExclusive") LocalDateTime toExclusive
+    );
 
     // HU-09: bloquea la reserva durante la cancelacion.
     // Debe ejecutarse dentro de un metodo @Transactional.

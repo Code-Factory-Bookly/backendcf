@@ -12,7 +12,9 @@ public class ClasspathNotificationTemplateRenderer implements NotificationTempla
 
     private static final String CONFIRMATION = "templates/email/booking-confirmation.txt";
     private static final String CANCELLATION = "templates/email/booking-cancellation.txt";
-    private static final String RESCHEDULING = "templates/email/booking-rescheduling.txt";
+    private static final String PROFESSIONAL_CANCELLATION =
+            "templates/email/booking-cancellation-professional.txt";
+    private static final String RESCHEDULING ="templates/email/booking-rescheduling.txt";
 
     @Override
     public String confirmation(Map<String, String> variables) {
@@ -22,6 +24,11 @@ public class ClasspathNotificationTemplateRenderer implements NotificationTempla
     @Override
     public String cancellation(Map<String, String> variables) {
         return render(CANCELLATION, variables);
+    }
+
+    @Override
+    public String professionalCancellation(Map<String, String> variables) {
+        return render(PROFESSIONAL_CANCELLATION, variables);
     }
 
     @Override

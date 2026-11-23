@@ -1,8 +1,8 @@
-# Arquitectura de software - Sprint 1 y Sprint 2
+# Arquitectura de software - Entrega 3
 
 ## 1. Propósito y alcance
 
-Este documento describe la arquitectura implementada del backend de Bookly. Sprint 1 cubrió el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial), HU-21 (`OwnershipGuard`) y HU-22 (registro de profesionales). Sprint 2 agregó HU-04 (horario semanal), HU-07 (disponibilidad), HU-08 y HU-09 (reservas), HU-10 (notificaciones), HU-17 (roles), HU-18 (MFA) y HU-19 (auditoría) — documentadas más abajo en este mismo archivo. La persistencia y el despliegue siguen siendo PostgreSQL con Docker Compose, y producción corre en Render.
+Este documento describe la arquitectura implementada del backend de Bookly. Sprint 1 cubrió el proyecto base Spring Boot, HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial), HU-21 (`OwnershipGuard`) y HU-22 (registro de profesionales). Sprint 2 agregó HU-04 (horario semanal), HU-07 (disponibilidad), HU-08 y HU-09 (reservas), HU-10 (notificaciones), HU-17 (roles), HU-18 (MFA) y HU-19 (auditoría). La Entrega 3 agrega HU-05 (bloqueos de agenda), HU-11/HU-12 (recursos físicos y capacidad), HU-13 (historial del cliente), HU-14 (agenda profesional), HU-15 (reporte de ocupación) y HU-16 (reporte general de uso). La persistencia sigue siendo PostgreSQL con migraciones Flyway; el desarrollo se ejecuta con Docker Compose y el despliegue existente utiliza Render.
 
 La solución se mantiene como un monolito modular porque el alcance actual es pequeño, existe un único dominio principal y el equipo necesita reducir la complejidad operativa. La separación por módulos permite evolucionar a nuevos dominios sin iniciar prematuramente una arquitectura de microservicios.
 
@@ -22,13 +22,17 @@ La solución se mantiene como un monolito modular porque el alcance actual es pe
 ```mermaid
 flowchart LR
     Usuario[Cliente / Profesional / Administrador]
-    Sistema[Bookly Backend<br/>API REST de reservas]
-    DB[(PostgreSQL)]
+    Sistema[Bookly Backend<br/>Monolito modular / API REST]
+    DB[(PostgreSQL<br/>Flyway)]
+    SMTP[Proveedor SMTP opcional]
     Usuario -->|HTTP JSON / Bearer| Sistema
     Sistema -->|JPA / SQL| DB
+    Sistema -.->|Notificaciones| SMTP
 ```
 
-El cliente HTTP representa Postman durante las pruebas del Sprint 1 y posteriormente podrá ser un frontend web. El backend es responsable de validar, autenticar y aplicar reglas; PostgreSQL conserva los datos transaccionales.
+El sistema es consumido por clientes web, móviles o herramientas HTTP de prueba. El backend valida,
+autentica y aplica las reglas de reservas, agendas, recursos, historiales y reportes; PostgreSQL conserva
+los datos transaccionales y el proveedor SMTP recibe las notificaciones cuando está configurado.
 
 HU-02 se implementa como un catálogo independiente de servicios. La categoría representa la
 especialidad en este alcance; no se crea una entidad independiente. HU-20 concentra el nombre y la
@@ -36,10 +40,9 @@ configuración general de la plataforma. HU-06 utiliza el campo `durationMinutes
 validar y conservar una duración entera entre 1 y 480 minutos.
 
 HU-22 registra a los profesionales como una cuenta con rol `PROFESSIONAL` más un perfil con su especialidad
-(`profesionales`, relación 1 a 1 con `app_user`). Solo el administrador los crea. En este alcance no se
-configuran agendas (HU-04 y HU-05), no se asignan a servicios y no hay invitación por correo: la contraseña
-inicial la define el administrador. La restricción a su propia agenda se aplicará con `OwnershipGuard` en la
-HU de agenda.
+(`profesionales`, relación 1 a 1 con `app_user`). Solo el administrador los crea. En la Entrega 3 el
+profesional puede configurar su horario y bloqueos, consultar su agenda y participar en la relación
+`profesional_servicio`; `OwnershipGuard` limita el acceso a su propia información.
 
 ## 4. Vista de contenedores C4
 
@@ -47,11 +50,25 @@ HU de agenda.
 flowchart TB
     Client[Cliente REST]
     subgraph Docker Compose
-      API[Backend Bookly<br/>Spring Boot / Java 17]
-      DB[(PostgreSQL 16<br/>app_user / platform / servicios / profesionales)]
+      API[Bookly API<br/>Spring Boot / Java 17<br/>Monolito modular]
+      AUTH[auth / MFA / auditoría]
+      BOOK[booking / agenda / notificaciones]
+      SCHEDULE[schedule / horarios / bloqueos]
+      RESOURCE[resource / recursos físicos]
+      REPORT[report / ocupación / uso general]
+      DB[(PostgreSQL 16<br/>Flyway V1-V70)]
     end
     Client -->|REST /api/v1| API
-    API -->|Spring Data JPA| DB
+    API --> AUTH
+    API --> BOOK
+    API --> SCHEDULE
+    API --> RESOURCE
+    API --> REPORT
+    AUTH -->|JPA / SQL| DB
+    BOOK -->|JPA / SQL| DB
+    SCHEDULE -->|JPA / SQL| DB
+    RESOURCE -->|JPA / SQL| DB
+    REPORT -->|SQL agregado / JPA| DB
 ```
 
 ## 5. Vista de despliegue
@@ -59,12 +76,14 @@ flowchart TB
 ```mermaid
 flowchart TB
     Client[Cliente REST / Frontend futuro]
-    subgraph Runtime[Entorno de ejecución]
-        App[Contenedor Bookly API<br/>Spring Boot / Java 17<br/>Puerto 8080]
+    subgraph Runtime[Entorno de ejecución Docker Compose / Render]
+        App[Bookly API<br/>Spring Boot / Java 17<br/>Puerto 8080]
         Db[Contenedor PostgreSQL 16<br/>Volumen postgres_data<br/>Puerto 5432 interno]
+        Mail[SMTP o proveedor de correo]
     end
     Client -->|HTTP JSON / Bearer| App
     App -->|JDBC / Flyway| Db
+    App -.->|Eventos de notificación| Mail
 ```
 
 El backend es stateless y la base conserva el estado transaccional. El volumen de PostgreSQL debe
@@ -134,11 +153,43 @@ El módulo `availability` no tiene tablas propias: calcula los bloques libres a 
 | `AvailabilityService` | Valida el rango (máximo 31 días, no pasado), verifica profesional y servicio activo y arma la respuesta; informa cuando no hay cupos |
 | `AvailabilityQuery` | Puerto que declara los datos necesarios: existencia del profesional, duración del servicio, franjas semanales y reservas ocupadas |
 | `AvailabilityQueryAdapter` | Implementa el puerto con `ProfessionalRepository`, `ServiceOfferingRepository`, `WeeklySlotRepository` y `BookingRepository` |
-| `AvailabilityCalculator` | Regla de dominio: genera bloques consecutivos con la duración del servicio y descarta los pasados y los solapados con reservas `CONFIRMADA` |
+| `AvailabilityCalculator` | Regla de dominio: genera bloques consecutivos con la duración del servicio y descarta los pasados y los solapados con reservas `CONFIRMADA`, `RESCHEDULED` o `COMPLETED` |
 | `InvalidAvailabilityQueryException` | Parámetros faltantes o inválidos; `GlobalExceptionHandler` la traduce a `400 VALIDATION_ERROR` |
 
 La consulta es informativa: no bloquea bloques. La integridad ante reservas simultáneas sigue
 garantizada por `POST /api/v1/reservas` (ver ADR-006).
+
+### Componentes de HU-05, HU-11 y HU-12 (agenda y recursos)
+
+Los módulos `schedule` y `resource` mantienen sus propias reglas y exponen puertos para que `booking` y
+`report` consulten la información necesaria sin acoplarse a entidades JPA de otros módulos.
+
+| Módulo | Componente | Responsabilidad |
+|---|---|---|
+| `schedule` | `AgendaBlockController` / `AgendaBlockService` | Crear, listar y eliminar bloqueos de agenda para `PROFESSIONAL` o `ADMIN`, respetando `OwnershipGuard`. |
+| `schedule` | `AgendaBlockRepository` | Persistir rangos de bloqueo y serializar operaciones concurrentes sobre el profesional. |
+| `resource` | `PhysicalResourceController` / `PhysicalResourceService` | CRUD de recursos físicos, exclusivo de `ADMIN`. |
+| `resource` | `ServiceResourceAssignmentController` / `ServiceResourceAssignmentService` | Asignar y retirar recursos de los servicios, exclusivo de `ADMIN`. |
+| `resource` | `ResourceCapacityValidator` | Verificar, dentro de la transacción de reserva, que el uso de recursos no supere `cantidad_total`. |
+| `booking` | `BookingRepository` | Considerar `CONFIRMADA`, `RESCHEDULED` y `COMPLETED` como estados que ocupan agenda; `CANCELADA` libera la franja. |
+
+Los bloqueos descuentan capacidad en el reporte de ocupación y participan en la validación de disponibilidad
+y creación de reservas. La integridad de rangos y solapamientos se refuerza en PostgreSQL mediante `V50`.
+
+### Componentes de HU-13 y HU-14 (historiales y agenda)
+
+| Componente | Responsabilidad |
+|---|---|
+| `CustomerBookingHistoryService` | Consultar el historial propio del cliente con filtros, orden y paginación. |
+| `BookingController` | Exponer `/reservas/cliente/historial` y conservar la ruta antigua por compatibilidad; las lecturas administrativas de otro cliente se auditan. |
+| `ProfessionalAgendaService` | Consultar la agenda del profesional para hoy o un rango inclusivo de máximo 31 días. |
+| `ProfessionalAgendaController` | Aplicar el rol y la propiedad del profesional: `PROFESSIONAL` solo consulta su agenda y `ADMIN` debe indicar `professionalId`. |
+| `BookingRepository.findAgenda` | Devolver reservas no canceladas ordenadas por fecha, usando el índice de profesional y fecha. |
+
+La ruta anterior `/reservas/profesional/{professionalId}` permanece obsoleta pero disponible hasta que el
+frontend migre a `/reservas/profesional/agenda`. Los contratos completos y la guía de migración están en
+[`docs/HU-13-historial-reservas-cliente.md`](docs/HU-13-historial-reservas-cliente.md),
+[`docs/HU-14-agenda-profesional.md`](docs/HU-14-agenda-profesional.md) y [`docs/openapi.yaml`](docs/openapi.yaml).
 
 ### Componentes de HU-15 (reporte de ocupación)
 
@@ -147,15 +198,29 @@ El módulo `report` no tiene tablas propias: calcula la ocupación a partir de l
 
 | Componente | Responsabilidad |
 |---|---|
-| `ReportController` | `GET /api/v1/reportes/ocupacion` con el parámetro opcional `periodo`; solo rol ADMIN (regla en `SecurityConfiguration`) |
+| `ReportController` | `GET /api/v1/reportes/ocupacion` con `periodo` o con el rango `desde`/`hasta`; solo rol `ADMIN` |
 | `ReportPeriodConverter` | Convierte `periodo` sin distinguir mayúsculas; un valor desconocido termina en `400 VALIDATION_ERROR` por el `GlobalExceptionHandler` |
-| `OccupancyReportService` | Calcula el rango (7 o 30 días terminando hoy), consulta los datos y arma la respuesta por día de la semana y por profesional |
+| `OccupancyReportService` | Calcula la ventana de 7/30 días o el rango propio de máximo 366 días y arma la respuesta por día y profesional |
 | `OccupancyQuery` | Puerto que declara los datos necesarios: profesionales, franjas semanales, reservas que ocupan agenda y nombres |
 | `OccupancyQueryAdapter` | Implementa el puerto con `ProfessionalRepository`, `WeeklySlotRepository`, `BookingRepository` y `UserAccountRepository` |
-| `OccupancyCalculator` | Regla de dominio: minutos reservados, capacidad y porcentaje con tope de 100; devuelve 0 cuando no hay capacidad |
+| `OccupancyCalculator` | Une franjas solapadas, descuenta bloqueos, calcula el porcentaje sin tope y devuelve `null` cuando hay reservas y capacidad cero |
 
-El reporte es de solo lectura (`@Transactional(readOnly = true)`) y usa el índice `idx_bookings_start_time`,
-por lo que no agrega migraciones. Sin reservas en el periodo responde ceros, sin excepciones.
+El reporte es de solo lectura (`@Transactional(readOnly = true)`) y usa `idx_bookings_start_time`. Las reservas
+que ocupan agenda son `CONFIRMADA`, `RESCHEDULED` y `COMPLETED`; si no hay reservas responde ceros. Los
+bloqueos de agenda se consultan mediante `OccupancyQuery.findAgendaBlocks` y se restan de la capacidad.
+
+### Componentes de HU-16 (reporte general de uso)
+
+| Componente | Responsabilidad |
+|---|---|
+| `GeneralReportController` | Exponer el reporte general solo a `ADMIN` con MFA verificada. |
+| `GeneralReportService` | Coordinar reservas totales, cancelaciones, ingresos y uso de recursos por periodo. |
+| `GeneralReportQueryAdapter` | Ejecutar agregaciones SQL sobre reservas, servicios, recursos y el precio histórico. |
+| `ReportSessionActivity` | Expirar la sesión del reporte después de 15 minutos sin actividad. |
+| `AuditRecorder` | Registrar cada consulta como `REPORT_VIEWED` con actor, IP, periodo y rango. |
+
+HU-16 utiliza los módulos `resource` y `booking` mediante consultas de lectura. El precio se toma de
+`bookings.price_at_booking` para que los ingresos históricos no cambien cuando se modifique el catálogo.
 
 ## 7. Flujo de login
 
@@ -212,7 +277,7 @@ sequenceDiagram
 
 ## 8. Seguridad implementada y pendientes
 
-Implementado: BCrypt, política de contraseña, normalización de email, respuestas genéricas ante credenciales inválidas, bloqueo temporal, token firmado y expiración, API stateless, validación de payloads y secretos configurables por ambiente. `JWT_SECRET` es obligatorio, persistente y no se genera automáticamente al iniciar. Las solicitudes sin autenticación responden `401 UNAUTHORIZED` y los usuarios autenticados sin permisos responden `403 ACCESS_DENIED`, ambos con el contrato de error uniforme. El alta de profesionales (`/api/v1/profesionales`) solo la puede ejecutar `ADMIN`.
+Implementado: BCrypt, política de contraseña, normalización de email, respuestas genéricas ante credenciales inválidas, bloqueo temporal, token firmado y expiración, API stateless, validación de payloads y secretos configurables por ambiente. `JWT_SECRET` es obligatorio, persistente y no se genera automáticamente al iniciar. Las solicitudes sin autenticación responden `401 UNAUTHORIZED` y los usuarios autenticados sin permisos responden `403 ACCESS_DENIED`, ambos con el contrato de error uniforme. El alta de profesionales (`/api/v1/profesionales`) y la gestión de recursos solo las puede ejecutar `ADMIN`. HU-16 requiere `ADMIN` con MFA verificada; HU-15 requiere `ADMIN`. Las lecturas críticas de reportes e historiales se registran en `audit_log`.
 
 Pendiente para completar los lineamientos avanzados: MFA para administración, revocación y rotación de tokens, cookies `HttpOnly`/`Secure` si el cliente las requiere, CORS restringido, rate limiting por IP/cuenta, logs estructurados de eventos de seguridad, invitación por correo o cambio de la contraseña inicial de los profesionales y SCA/SAST/DAST.
 
@@ -286,16 +351,23 @@ src/main/java/com/bookly/backendcf/
 │   ├── domain/model/      # reglas de cálculo de bloques libres
 │   ├── infrastructure/    # adaptador sobre los repositorios de otros módulos
 │   └── presentation/      # controlador y DTO REST
+├── booking/                # reservas, historial de cliente y agenda profesional
+├── schedule/               # horarios semanales y bloqueos de agenda
+├── resource/               # recursos físicos y asignación a servicios
+├── report/                 # reportes de ocupación y uso general
+├── professional/           # perfiles y consultas de profesionales
+├── catalog/                # catálogo de servicios
+├── notification/           # eventos y entregas de correo
 └── shared/error/          # errores HTTP uniformes
 ```
 
 ## 12. Evidencia y próximos pasos
 
-La aplicación compila y cuenta con despliegue definido mediante Docker Compose. Se validó el arranque
-contra PostgreSQL 16 en contenedor: Flyway validó las cinco migraciones y dejó el esquema en V5, con
-las tablas `app_user`, `platform` y `servicios`. También se verificó que un endpoint protegido responde
-`401` con el contrato uniforme. Las pruebas automatizadas, Quality Gate y la evidencia funcional
-detallada pertenecen al rol de Calidad.
+La aplicación compila y cuenta con despliegue definido mediante Docker Compose. El esquema se versiona
+con Flyway y las migraciones de esta entrega llegan hasta `V70`, incluyendo bloqueos de agenda, recursos,
+precio histórico e índices y eventos de auditoría de reportes e historiales. Se validaron localmente la
+compilación y las pruebas dirigidas de los módulos de reportes, recursos y agenda; la suite y el Quality
+Gate completos se evidencian en el pipeline y en el PR de integración de Calidad.
 
 ## 13. Componentes de HU-10: notificaciones de reserva
 

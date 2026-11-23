@@ -1,10 +1,10 @@
-# Base de datos - Sprint 1 y Sprint 2
+# Base de datos - Entrega 3
 
 ## 1. Propósito y alcance
 
-Este documento presenta el diseño lógico y físico implementado de Bookly para HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial de la plataforma) y HU-22 (registro de profesionales). PostgreSQL es la fuente de verdad para las cuentas, los perfiles de profesionales, el catálogo —incluida la duración de cada servicio—, la plataforma, los roles y el estado de protección contra intentos fallidos.
+Este documento presenta el diseño lógico y físico implementado de Bookly para HU-01 (registro de cliente), HU-02 (catálogo de servicios), HU-03 (inicio de sesión seguro), HU-06 (duración estándar de servicios), HU-20 (configuración inicial de la plataforma) y HU-22 (registro de profesionales). También documenta la evolución de Sprint 2 y la Entrega 3: reservas, notificaciones, bloqueos de agenda (HU-05), recursos físicos y capacidad (HU-11/HU-12), historial del cliente (HU-13), agenda profesional (HU-14), reporte de ocupación (HU-15) y reporte general de uso (HU-16). PostgreSQL es la fuente de verdad y Flyway administra las migraciones.
 
-El modelo está preparado para extenderse en los siguientes sprints con agendas y reservas. Las especialidades de HU-02 se representan inicialmente mediante `servicios.categoria`, de acuerdo con el [ADR-005](docs/ADR-005-alcance-HU-02.md); no existe una entidad independiente mientras no haya reglas que la justifiquen. La especialidad de un profesional (HU-22) sigue el mismo criterio: es un atributo de `profesionales.especialidad`.
+Las especialidades de HU-02 se representan mediante `servicios.categoria`, de acuerdo con el [ADR-005](docs/ADR-005-alcance-HU-02.md); no existe una entidad independiente porque no hay reglas que la justifiquen. La especialidad de un profesional (HU-22) sigue el mismo criterio: es un atributo de `profesionales.especialidad`. Las entidades de agenda, reservas, recursos y auditoría se relacionan mediante UUID y mantienen las reglas de negocio críticas en constraints, índices y migraciones versionadas.
 
 ## 2. Entidades y relaciones
 
@@ -21,6 +21,8 @@ erDiagram
         BOOLEAN enabled
         INTEGER failed_login_attempts
         TIMESTAMPTZ locked_until
+        BOOLEAN mfa_enabled
+        VARCHAR mfa_secret_encrypted
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
@@ -48,15 +50,106 @@ erDiagram
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
-  APP_USER ||--o| PROFESIONALES : "tiene perfil"
+    HORARIO_SEMANAL {
+        UUID id PK
+        UUID profesional_id FK
+        VARCHAR dia_semana
+        TIME hora_inicio
+        TIME hora_fin
+    }
+    BOOKINGS {
+        UUID id PK
+        UUID customer_id FK
+        UUID professional_id FK
+        UUID service_id FK
+        TIMESTAMP start_time
+        TIMESTAMP end_time
+        VARCHAR status
+        NUMERIC price_at_booking
+        TIMESTAMP cancelled_at
+    }
+    PROFESIONAL_SERVICIO {
+        UUID id PK
+        UUID profesional_id FK
+        UUID servicio_id FK
+        TIMESTAMPTZ created_at
+    }
+    BLOQUEO_AGENDA {
+        UUID id PK
+        UUID profesional_id FK
+        TIMESTAMP inicio
+        TIMESTAMP fin
+        VARCHAR motivo
+        TIMESTAMPTZ created_at
+    }
+    RECURSOS_FISICOS {
+        UUID id PK
+        VARCHAR nombre UK
+        INTEGER cantidad_total
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+    SERVICIO_RECURSO {
+        UUID servicio_id PK, FK
+        UUID recurso_id PK, FK
+    }
+    NOTIFICATION_DELIVERY {
+        UUID id PK
+        UUID event_id UK
+        UUID booking_id FK
+        VARCHAR event_type
+        VARCHAR status
+        INTEGER attempts
+        TIMESTAMPTZ created_at
+    }
+    AUDIT_LOG {
+        UUID id PK
+        UUID actor_user_id FK
+        VARCHAR action_type
+        VARCHAR resource_type
+        UUID resource_id
+        TIMESTAMPTZ occurred_at
+        JSONB metadata
+    }
+    MFA_RECOVERY_CODE {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR code_hash
+        TIMESTAMPTZ used_at
+        TIMESTAMPTZ created_at
+    }
+    MFA_TRUSTED_DEVICE {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR token_hash
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ expires_at
+    }
+
+    APP_USER ||--o| PROFESIONALES : "tiene perfil"
+    APP_USER ||--o{ BOOKINGS : "es cliente"
+    APP_USER ||--o{ AUDIT_LOG : "realiza acciones"
+    APP_USER ||--o{ MFA_RECOVERY_CODE : "tiene codigos"
+    APP_USER ||--o{ MFA_TRUSTED_DEVICE : "confia dispositivos"
+    PROFESIONALES ||--o{ HORARIO_SEMANAL : "define franjas"
+    PROFESIONALES ||--o{ BOOKINGS : "atiende"
+    SERVICIOS ||--o{ BOOKINGS : "se reserva"
+    PROFESIONALES ||--o{ PROFESIONAL_SERVICIO : "ofrece"
+    SERVICIOS ||--o{ PROFESIONAL_SERVICIO : "es ofrecido por"
+    PROFESIONALES ||--o{ BLOQUEO_AGENDA : "bloquea"
+    BOOKINGS ||--o{ NOTIFICATION_DELIVERY : "genera entregas"
+    SERVICIOS ||--o{ SERVICIO_RECURSO : "requiere"
+    RECURSOS_FISICOS ||--o{ SERVICIO_RECURSO : "se asigna"
 ```
 
-Existen las entidades persistidas `app_user`, `platform`, `servicios` y `profesionales`. La única relación
-FK es `profesionales (id, rol) → app_user (id, role)`: es 1 a 1, comparte la clave primaria y solo admite
-cuentas con rol `PROFESSIONAL`. Una cuenta tiene como máximo un perfil de profesional y un perfil no existe
-sin su cuenta. La plataforma es única y el catálogo se mantiene independiente hasta que las HUs de agendas y
-reservas definan sus relaciones. `app_user.email` y `servicios.nombre` tienen unicidad para sus respectivas
-reglas de negocio.
+El diagrama representa el esquema completo de la entrega final. `APP_USER` se relaciona con profesionales,
+clientes, auditoría y MFA; `PROFESIONALES` se relaciona con horarios, reservas, bloqueos y servicios ofrecidos;
+`SERVICIOS` se relaciona con reservas, profesionales y recursos físicos. `PLATFORM` es una tabla singleton y
+no tiene FK hacia otra entidad.
+
+`AUDIT_LOG.resource_id` es intencionalmente un identificador polimórfico y no una FK: puede referirse a un
+`BOOKING`, `USER` o `REPORT` según `resource_type`. La FK de trazabilidad es `actor_user_id → app_user.id`.
+Las relaciones N:M se implementan mediante `PROFESIONAL_SERVICIO` y `SERVICIO_RECURSO`.
 
 ## 3. Reglas de negocio persistidas
 
@@ -275,6 +368,15 @@ El modelo físico lo aplica **Flyway** al arrancar, desde `src/main/resources/db
 - `V4__rename_patient_role_to_customer.sql`: migra el rol histórico `PATIENT` a `CUSTOMER` y actualiza la restricción.
 - `V5__create_service_catalog.sql`: tabla `servicios` y sus restricciones de catálogo.
 - `V6__create_professionals.sql`: tabla `profesionales` (perfil 1 a 1 de `app_user` con la especialidad) y la restricción que solo admite cuentas con rol `PROFESSIONAL`.
+- `V10__create_weekly_schedule.sql`: franjas del horario semanal de cada profesional.
+- `V30__create_bookings.sql` y `V31__allow_rebooking_cancelled_slots.sql`: reservas, estados e índices de consulta.
+- `V40__create_audit_log.sql`, `V41__mfa_totp.sql` y `V42__mfa_trusted_devices.sql`: auditoría append-only y soporte de MFA.
+- `V43__create_notification_delivery.sql`, `V44__cascade_notification_delivery_booking.sql` y `V45__create_professional_service.sql`: notificaciones y relación profesional-servicio.
+- `V46__prevent_overlapping_confirmed_bookings.sql`, `V47__occupying_statuses_block_overlaps.sql` y `V50__create_agenda_blocks.sql`: integridad de solapamientos y bloqueos de agenda.
+- `V55__create_physical_resources.sql` y `V56__create_service_resource.sql`: recursos físicos, cantidades y asignación a servicios.
+- `V65__add_booking_price_snapshot.sql`: precio histórico de la reserva para ingresos estables.
+- `V66__create_general_report_indexes.sql`: índices para agregaciones de reportes.
+- `V67__allow_report_audit_events.sql` y `V70__allow_customer_history_audit.sql`: tipos de auditoría de reportes e historial.
 
 La unicidad de `app_user.email` y la existencia de una sola fila en `platform` se resuelven en
 PostgreSQL mediante restricciones/índices únicos. La aplicación traduce sus violaciones a errores
@@ -354,7 +456,14 @@ Debe medirse su beneficio con `EXPLAIN (ANALYZE, BUFFERS)` antes de incorporarlo
 
 ## 8. Volumen y crecimiento inicial
 
-El volumen esperado del Sprint 1 es bajo y la tabla es pequeña. La clave UUID evita exponer una secuencia predecible y facilita futuras integraciones. El campo `email` es el principal acceso de lectura. Para sprints posteriores deberán estimarse usuarios, reservas, historial y concurrencia antes de decidir particionamiento o desnormalización.
+El volumen esperado para cuentas, servicios y perfiles continúa siendo bajo. En la Entrega 3 se incorporan
+reservas, historial, recursos y auditoría, por lo que las consultas de mayor crecimiento son las que filtran
+por `professional_id`, `customer_id`, `start_time` y fecha de auditoría. Se mantienen UUID para las claves
+de negocio y no se introduce particionamiento: el volumen actual no lo justifica.
+
+La evidencia de HU-15 utiliza 200.000 reservas distribuidas entre 20 profesionales y valida el uso de
+`idx_bookings_start_time` con `EXPLAIN ANALYZE`. Para HU-16 se incluye un script de rendimiento que debe
+ejecutarse con datos representativos antes de ajustar índices adicionales: [`docs/evidencia/HU-16-rendimiento.sql`](docs/evidencia/HU-16-rendimiento.sql).
 
 ## 9. Ejecución y verificación
 
@@ -403,7 +512,12 @@ y un nuevo `docker compose up --build`.
 
 ## 10. Pendientes de evolución
 
-Para los siguientes sprints se deberán agregar y relacionar las entidades que surjan de las HU: profesional, disponibilidad, reserva, cancelación e historial. También se deberán completar auditoría de acciones críticas, roles de base de datos con mínimo privilegio, pruebas de restauración y procedimientos o triggers únicamente cuando exista una regla que justifique su ejecución dentro de PostgreSQL.
+La Entrega 3 deja implementados el modelo de agenda, reservas, recursos, historial, reportes y auditoría.
+Permanecen como evolución operativa la medición periódica de volumen, pruebas de restauración, roles de
+base de datos con mínimo privilegio y la ejecución de los scripts de rendimiento con datos del entorno.
+La base ya utiliza una función y triggers para proteger `audit_log`; no se agrega un procedimiento almacenado
+porque las reglas actuales se resuelven con constraints, índices, funciones de integridad y transacciones de
+la aplicación.
 
 ## 11. Sprint 2: reservas y notificaciones de HU-10
 
@@ -516,13 +630,36 @@ entorno local sin utilizarla como sustituto del orden correcto en producción.
 
 
 
-## 12. Sprint 3: reporte de ocupación de HU-15
+## 12. Sprint 3: agenda, recursos y reporte de ocupación
 
-El Sprint 3 agrega el reporte de ocupación de las agendas para el rol `ADMIN`. El reporte no crea tablas,
-columnas ni migraciones: calcula los porcentajes en la aplicación a partir de las reservas y los horarios
-semanales que ya existen, y la base de datos es su única fuente de datos.
+La Entrega 3 agrega bloqueos de agenda, recursos físicos y reportes para el rol `ADMIN`. Los bloqueos y
+recursos tienen tablas propias; el reporte de ocupación calcula los porcentajes en la aplicación a partir
+de reservas, horarios y bloqueos.
 
-### Datos que consume el reporte
+### Bloqueos de agenda (HU-05)
+
+`V50__create_agenda_blocks.sql` crea `bloqueo_agenda` con `profesional_id`, `inicio`, `fin` y motivo.
+PostgreSQL impide rangos invertidos y solapamientos del mismo profesional; la
+aplicación traduce la violación a `409 AGENDA_BLOCK_OVERLAP`. La consulta de reservas afectadas evita crear
+un bloqueo sobre citas ocupadas.
+
+### Recursos físicos y asignación a servicios (HU-11/HU-12)
+
+`V55__create_physical_resources.sql` crea `recursos_fisicos`:
+
+| Columna | Regla |
+|---|---|
+| `id` | UUID, clave primaria |
+| `nombre` | Obligatorio y único sin distinguir mayúsculas |
+| `cantidad_total` | Obligatorio, entero mayor que cero |
+| `created_at`, `updated_at` | Trazabilidad de cambios |
+
+`V56__create_service_resource.sql` crea `servicio_recurso`, con clave primaria compuesta
+(`servicio_id`, `recurso_id`), claves foráneas a `servicios` y `recursos_fisicos`, y un índice inverso por
+`recurso_id`. La cantidad disponible se valida en la transacción de reserva mediante
+`ResourceCapacityValidator`; la base conserva la relación y la aplicación calcula el uso de la franja.
+
+### Datos que consume el reporte de ocupación (HU-15)
 
 ```mermaid
 erDiagram
@@ -547,19 +684,22 @@ erDiagram
 
 | Tabla | Atributos usados | Uso en el reporte |
 |---|---|---|
-| `bookings` | `professional_id`, `start_time`, `end_time`, `status` | Minutos reservados; solo cuentan `CONFIRMADA` y `COMPLETED` |
+| `bookings` | `professional_id`, `start_time`, `end_time`, `status` | Minutos reservados; cuentan `CONFIRMADA`, `RESCHEDULED` y `COMPLETED` |
 | `horario_semanal` | `profesional_id`, `dia_semana`, `hora_inicio`, `hora_fin` | Capacidad: franjas por cada día del rango |
+| `bloqueo_agenda` | `profesional_id`, `inicio`, `fin` | Tiempo que se descuenta de la capacidad |
 | `profesionales` | `id` | Lista de profesionales del reporte |
 | `app_user` | `id`, `full_name` | Nombre del profesional |
 
 ### Modelo físico e índices
 
-El reporte no requiere una migración. La consulta principal filtra `bookings` por estado y por rango de
-`start_time`, y la cubre el índice creado en `V30`:
+La consulta principal filtra `bookings` por estado y por rango de `start_time`, y la cubren los índices
+creados en `V30` y las migraciones posteriores:
 
 | Índice | Consulta soportada |
 |---|---|
 | `idx_bookings_start_time` | Reservas del periodo del reporte (rango de `start_time`) |
+| `idx_bookings_professional_start` | Agenda e historial por profesional y fecha |
+| `ix_bloqueo_agenda_profesional_inicio` | Bloqueos por profesional y rango |
 | `pk_app_user` | Nombres de profesionales por id |
 
 `horario_semanal` y `profesionales` son tablas pequeñas que se leen completas, por lo que no necesitan
@@ -575,7 +715,7 @@ equivalente en SQL y están en `docs/evidencia/HU-15-consultas.sql`:
 SELECT b.professional_id,
        SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) AS minutos_reservados
 FROM bookings b
-WHERE b.status IN ('CONFIRMADA', 'COMPLETED')
+WHERE b.status IN ('CONFIRMADA', 'RESCHEDULED', 'COMPLETED')
   AND b.start_time >= :desde AND b.start_time < :hasta
 GROUP BY b.professional_id;
 
@@ -583,7 +723,7 @@ GROUP BY b.professional_id;
 SELECT EXTRACT(ISODOW FROM b.start_time) AS dia_semana,
        SUM(EXTRACT(EPOCH FROM (b.end_time - b.start_time)) / 60) AS minutos_reservados
 FROM bookings b
-WHERE b.status IN ('CONFIRMADA', 'COMPLETED')
+WHERE b.status IN ('CONFIRMADA', 'RESCHEDULED', 'COMPLETED')
   AND b.start_time >= :desde AND b.start_time < :hasta
 GROUP BY EXTRACT(ISODOW FROM b.start_time);
 
@@ -592,7 +732,16 @@ SELECT h.profesional_id, h.dia_semana,
        SUM(EXTRACT(EPOCH FROM (h.hora_fin - h.hora_inicio)) / 60) AS minutos_franja
 FROM horario_semanal h
 GROUP BY h.profesional_id, h.dia_semana;
+
+-- Bloqueos que cruzan el rango del reporte; se descuentan de la capacidad.
+SELECT profesional_id, inicio, fin
+FROM bloqueo_agenda
+WHERE inicio < :hasta AND fin > :desde;
 ```
+
+El cálculo une franjas semanales solapadas antes de sumar capacidad, descuenta la intersección con
+`bloqueo_agenda` y no limita artificialmente el porcentaje a 100. Si existen reservas y la capacidad es
+cero, el porcentaje es `NULL`; sin reservas, el valor es cero.
 
 ### Verificación realizada
 
@@ -605,3 +754,40 @@ entre 20 profesionales. La consulta del periodo `MES` usa un `Bitmap Index Scan`
 docker cp docs/evidencia/HU-15-rendimiento.sql backendcf-db:/tmp/hu15.sql
 docker exec backendcf-db psql -U backendcf -d backendcf -f /tmp/hu15.sql
 ```
+
+El endpoint también acepta `desde` y `hasta` juntos, con un rango inclusivo de máximo 366 días. Cuando se
+envía un rango propio, `period` es `null` en la respuesta.
+
+## 13. Sprint 3: historial y agenda
+
+HU-13 y HU-14 no agregan tablas nuevas. Reutilizan `bookings`, `app_user`, `servicios` y `profesionales`.
+
+- HU-13 consulta por `customer_id`, admite filtros de fecha y estado, orden y paginación de máximo 100.
+- HU-14 consulta por `professional_id`, ordena por `start_time` e incluye solo estados que ocupan agenda;
+  las reservas `CANCELADA` no aparecen.
+- El índice de agenda por profesional y fecha soporta la consulta de HU-14. El historial conserva el índice
+  existente por cliente mientras no exista evidencia de volumen que justifique otro índice.
+- La lectura administrativa del historial de otro cliente se registra como `CUSTOMER_HISTORY_VIEWED`.
+
+La ruta antigua de agenda se conserva por compatibilidad con el frontend y está marcada como obsoleta en
+OpenAPI. El contrato completo está en [`docs/openapi.yaml`](docs/openapi.yaml).
+
+## 14. Sprint 3: reporte general de uso (HU-16)
+
+HU-16 utiliza las tablas `bookings`, `servicios`, `recursos_fisicos`, `servicio_recurso` y `audit_log`.
+
+### Precio histórico
+
+`V65__add_booking_price_snapshot.sql` agrega `bookings.price_at_booking`, rellena las reservas existentes
+con el precio vigente del servicio y conserva el valor al crear reservas nuevas. El reporte suma este
+snapshot para que cambiar el precio del catálogo no altere los ingresos históricos.
+
+### Índices y auditoría
+
+- `V66__create_general_report_indexes.sql` agrega índices para las agregaciones por servicio y recursos.
+- `V67__allow_report_audit_events.sql` permite registrar `REPORT_VIEWED` en `audit_log`.
+- `V70__allow_customer_history_audit.sql` permite registrar `CUSTOMER_HISTORY_VIEWED`.
+- La función y los triggers definidos en `V40` mantienen `audit_log` append-only y rechazan `UPDATE`,
+  `DELETE` y `TRUNCATE`.
+
+Las consultas de referencia y rendimiento están en [`docs/evidencia/HU-16-rendimiento.sql`](docs/evidencia/HU-16-rendimiento.sql).

@@ -7,8 +7,8 @@ crítica de la plataforma.
 
 ## Estado del proyecto
 
-Sprint 1 y Sprint 2 completos: las 15 HU del tablero de Azure DevOps están mergeadas a `main` y
-desplegadas.
+Sprint 1, Sprint 2 y la implementación funcional de la Entrega 3 están integrados en `main`. El detalle
+del estado de Azure DevOps y de la validación de Calidad se mantiene en [README_QA.md](README_QA.md).
 
 | HU | Historia |
 |---|---|
@@ -21,6 +21,12 @@ desplegadas.
 | HU-08 | Creación y agendamiento de reserva |
 | HU-09 | Cancelación autónoma de reservas |
 | HU-10 | Confirmación de reserva por correo electrónico |
+| HU-11 | Registro de recursos físicos |
+| HU-12 | Validación de capacidad de recursos |
+| HU-13 | Historial de reservas del cliente |
+| HU-14 | Agenda profesional |
+| HU-15 | Reporte de ocupación |
+| HU-16 | Reporte general de uso |
 | HU-17 | Asignación de roles y permisos (RBAC) |
 | HU-18 | Autenticación multifactor (MFA) para accesos administrativos |
 | HU-19 | Registro de auditoría de acciones críticas |
@@ -35,14 +41,14 @@ El estado detallado de cobertura de pruebas, Quality Gate de SonarCloud y riesgo
 Además:
 
 - API REST versionada bajo `/api/v1`, documentada en [docs/openapi.yaml](docs/openapi.yaml).
-- Persistencia en PostgreSQL con JPA/Hibernate; esquema administrado por Flyway (`V1` a `V44`).
+- Persistencia en PostgreSQL con JPA/Hibernate; esquema administrado por Flyway (`V1` a `V70`).
 - Roles unificados: `CUSTOMER`, `PROFESSIONAL` y `ADMIN`, con cambio de rol auditado (HU-17).
 - Contraseñas almacenadas mediante BCrypt; tokens Bearer firmados con `io.jsonwebtoken` (JJWT).
 - Segundo factor (TOTP) obligatorio para `ADMIN`, con códigos de recuperación (HU-18).
 - Bloqueo temporal después de 5 intentos fallidos durante 15 minutos.
 - Reservas atómicas: la base garantiza que una franja no se reserve dos veces (`ADR-006`).
 - Correo de confirmación/cancelación de reserva, procesado por eventos después del commit (HU-10).
-- Bitácora de auditoría inmutable para acciones críticas (HU-19).
+- Bitácora de auditoría inmutable para acciones críticas, reportes e historial (HU-19, HU-16 y HU-13).
 - Manejo uniforme de errores con `errorCode`, `message`, `details`, `traceId` y `timestamp`.
 - Ejecución local y contenerizada con Docker Compose; desplegado en Render.
 
@@ -221,6 +227,32 @@ GET  /api/v1/profesionales     # ADMIN
 POST /api/v1/profesionales     # ADMIN
 ```
 
+### Recursos físicos (HU-11, HU-12)
+
+```http
+GET    /api/v1/recursos                                # ADMIN
+POST   /api/v1/recursos                                # ADMIN
+PUT    /api/v1/recursos/{id}                           # ADMIN
+GET    /api/v1/recursos/asignaciones/servicios/{serviceId} # ADMIN
+POST   /api/v1/recursos/asignaciones/servicios/{serviceId}/recursos/{resourceId} # ADMIN
+DELETE /api/v1/recursos/asignaciones/servicios/{serviceId}/recursos/{resourceId} # ADMIN
+```
+
+Los recursos tienen una cantidad total positiva y un nombre único sin distinguir mayúsculas. Al crear una
+reserva, `ResourceCapacityValidator` verifica el uso de los recursos asociados al servicio dentro de la
+transacción.
+
+### Bloqueos de agenda (HU-05)
+
+```http
+GET    /api/v1/horarios/{professionalId}/bloqueos             # PROFESSIONAL o ADMIN
+POST   /api/v1/horarios/{professionalId}/bloqueos             # PROFESSIONAL o ADMIN
+DELETE /api/v1/horarios/{professionalId}/bloqueos/{blockId}   # PROFESSIONAL o ADMIN
+```
+
+Los bloqueos usan rangos `[inicio, fin)`, no pueden invertirse ni solaparse para un mismo profesional y
+descuentan capacidad en el reporte de ocupación.
+
 ### Horario semanal del profesional (HU-04)
 
 ```http
@@ -236,15 +268,29 @@ Reemplaza todas las franjas en una sola operación. Rechaza franjas con hora de 
 GET /api/v1/disponibilidad?profesionalId=&servicioId=&desde=&hasta=     # CUSTOMER
 ```
 
-`desde`/`hasta` son fechas (`yyyy-MM-dd`), rango máximo de 31 días. Cada bloque dura lo mismo que el servicio, se genera dentro del horario semanal del profesional (HU-04) y excluye lo que ya pasó o se solapa con una reserva `CONFIRMADA`. Si no hay bloques libres, responde `200` con `available=false` y un mensaje sugiriendo ampliar el filtro.
+`desde`/`hasta` son fechas (`yyyy-MM-dd`), rango máximo de 31 días. Cada bloque dura lo mismo que el servicio, se genera dentro del horario semanal del profesional (HU-04) y excluye lo que ya pasó o se solapa con una reserva `CONFIRMADA`, `RESCHEDULED` o `COMPLETED`. Si no hay bloques libres, responde `200` con `available=false` y un mensaje sugiriendo ampliar el filtro.
 
 ### Reporte de ocupación (HU-15)
 
 ```http
-GET /api/v1/reportes/ocupacion?periodo=MES     # ADMIN
+GET /api/v1/reportes/ocupacion?periodo=MES                 # ADMIN
+GET /api/v1/reportes/ocupacion?desde=2026-11-01&hasta=2026-11-30
 ```
 
-`periodo` es `SEMANA` (últimos 7 días) o `MES` (últimos 30 días, valor por defecto) y no distingue mayúsculas. Devuelve el porcentaje de ocupación por día de la semana y por profesional: minutos de reservas `CONFIRMADA` y `COMPLETED` sobre la capacidad definida en el horario semanal (HU-04). Si no hay reservas en el periodo, responde `200` con todos los valores en cero. Un `periodo` desconocido responde `400`, y cualquier rol distinto de `ADMIN`, `403`.
+`periodo` es `SEMANA` (últimos 7 días) o `MES` (últimos 30 días, valor por defecto) y no distingue
+mayúsculas. También se puede enviar `desde` y `hasta` juntos para un rango inclusivo de máximo 366 días.
+La capacidad une franjas solapadas y descuenta bloqueos; cuentan las reservas `CONFIRMADA`, `RESCHEDULED`
+y `COMPLETED`. El porcentaje no se limita a 100 y es `null` cuando hay reservas y capacidad cero.
+
+### Reporte general de uso (HU-16)
+
+```http
+GET /api/v1/reportes/general?periodo=MES     # ADMIN con MFA verificada
+```
+
+Devuelve reservas totales, cancelaciones promedio, ingresos usando `price_at_booking` y uso de recursos.
+La consulta registra `REPORT_VIEWED` en la auditoría y la sesión del reporte expira después de 15 minutos
+sin actividad.
 
 ### Reservas (HU-08, HU-09)
 
@@ -252,11 +298,12 @@ GET /api/v1/reportes/ocupacion?periodo=MES     # ADMIN
 POST   /api/v1/reservas                                # CUSTOMER
 PATCH  /api/v1/reservas/{id}/cancelacion                 # CUSTOMER
 GET    /api/v1/reservas/cliente/{customerId}             # el propio cliente o ADMIN
+GET    /api/v1/reservas/cliente/historial                # CUSTOMER, usa el id del token
 GET    /api/v1/reservas/profesional/agenda               # HU-14: PROFESSIONAL (la propia) o ADMIN (?professionalId=)
 GET    /api/v1/reservas/profesional/{professionalId}     # OBSOLETA (usar /agenda): el propio profesional o ADMIN
 ```
 
-Dos clientes no pueden quedarse con la misma franja: la base lo garantiza con una restricción única (`ADR-006`), y el perdedor de la carrera recibe `409`. Cancelar exige una anticipación mínima configurable (`BOOKING_CANCELLATION_MIN_ADVANCE_MINUTES`).
+Dos clientes no pueden quedarse con la misma franja: la base lo garantiza con exclusión de rangos (`ADR-006`), y el perdedor de la carrera recibe `409`. Cancelar exige una anticipación mínima configurable (`BOOKING_CANCELLATION_MIN_ADVANCE_MINUTES`). El historial propio admite filtros, orden y paginación de máximo 100; la lectura administrativa del historial de otro cliente queda auditada.
 
 ### Roles (HU-17)
 

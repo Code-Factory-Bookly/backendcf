@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookly-prometheus
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bookly-prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bookly-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: bookly-prometheus-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookly-prometheus
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-prometheus
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: bookly-prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http

@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookly-postgres
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-postgres
+spec:
+  selector:
+    app.kubernetes.io/name: bookly-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: bookly-postgres
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-postgres
+spec:
+  serviceName: bookly-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bookly-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bookly-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: backendcf
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bookly-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookly-secrets
+                  key: POSTGRES_PASSWORD
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

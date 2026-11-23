@@ -80,10 +80,14 @@ flowchart TB
         App[Bookly API<br/>Spring Boot / Java 17<br/>Puerto 8080]
         Db[Contenedor PostgreSQL 16<br/>Volumen postgres_data<br/>Puerto 5432 interno]
         Mail[SMTP o proveedor de correo]
+        Prom[Prometheus<br/>Puerto 9090]
+        Graf[Grafana<br/>Puerto 3000]
     end
     Client -->|HTTP JSON / Bearer| App
     App -->|JDBC / Flyway| Db
     App -.->|Eventos de notificación| Mail
+    Prom -->|scrape /actuator/prometheus :8081| App
+    Graf -->|consultas| Prom
 ```
 
 El backend es stateless y la base conserva el estado transaccional. El volumen de PostgreSQL debe
@@ -91,6 +95,12 @@ respaldarse y no debe compartirse entre entornos. `JWT_SECRET` se inyecta como s
 y no se almacena en la imagen.
 
 El contenedor backend es stateless: no mantiene sesión HTTP. El estado de cuenta, intentos fallidos y bloqueo se almacenan en PostgreSQL. El token firmado permite autenticar solicitudes posteriores.
+
+La aplicación expone el puerto de gestión `8081` separado del puerto público `8080`. Actuator publica
+únicamente `health`, `info` y `prometheus`; los demás endpoints de gestión se deniegan. El overlay
+[`docker-compose.observability.yml`](docker-compose.observability.yml) levanta Prometheus y Grafana para
+desarrollo. Para validar localmente los manifiestos se recomienda kind (Kubernetes IN Docker), mientras
+que [`k8s/`](k8s/) contiene los manifiestos del despliegue demostrativo en Kubernetes y su guía paso a paso.
 
 ## 6. Vista de componentes del módulo de autenticación
 

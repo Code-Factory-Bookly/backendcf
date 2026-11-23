@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: bookly-prometheus
+    type: prometheus
+    access: proxy
+    url: http://bookly-prometheus:9090
+    isDefault: true
+    editable: false

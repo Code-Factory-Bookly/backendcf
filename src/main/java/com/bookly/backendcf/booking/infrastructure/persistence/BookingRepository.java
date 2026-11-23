@@ -27,7 +27,8 @@ import java.util.Collection;
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Query("SELECT b FROM Booking b WHERE b.professionalId = :professionalId " +
-            "AND b.status = 'CONFIRMADA' " +
+            // #220: mismos estados que BookingStatus.OCCUPYING.
+            "AND b.status IN ('CONFIRMADA', 'RESCHEDULED', 'COMPLETED') " +
             "AND ((b.startTime < :endTime) AND (b.endTime > :startTime))")
     List<Booking> findOverlappingBookings(
             @Param("professionalId") UUID professionalId,

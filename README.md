@@ -65,6 +65,8 @@ Además:
 | Correo | Spring Mail |
 | Pruebas | JUnit 5, Mockito |
 | Contenedores | Docker Compose |
+| Kubernetes local | kind (Kubernetes IN Docker) |
+| Observabilidad | Spring Boot Actuator, Prometheus, Grafana |
 | Construcción | Maven Wrapper |
 | Calidad | SonarCloud (Quality Gate en cada PR/push) |
 
@@ -136,6 +138,25 @@ Para partir de cero:
 ```bash
 docker compose down -v && docker compose up --build
 ```
+
+### Observabilidad local
+
+La aplicación expone Actuator en el puerto interno `8081`. Para levantar Prometheus y Grafana sin modificar
+el Compose base, usar el archivo de extensión:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d --build
+```
+
+Grafana queda disponible en `http://localhost:3000` y Prometheus en `http://localhost:9090`. El dashboard
+`Bookly - Observabilidad` se provisiona automáticamente y consulta las métricas de solicitudes, latencia,
+memoria JVM y disponibilidad del proceso.
+
+### Despliegue Kubernetes
+
+Los manifiestos, la configuración de secretos y el procedimiento están en [`k8s/README.md`](k8s/README.md).
+El despliegue incluye la API, PostgreSQL para demostración, Prometheus y Grafana. Para producción se debe
+usar una imagen publicada en un registro y una base PostgreSQL administrada con respaldos.
 
 ## Ejecución local sin Docker
 

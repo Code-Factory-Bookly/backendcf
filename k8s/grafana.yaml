@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookly-grafana
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bookly-grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bookly-grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.1.0
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: bookly-secrets
+                  key: GRAFANA_ADMIN_USER
+                  optional: true
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bookly-secrets
+                  key: GRAFANA_ADMIN_PASSWORD
+                  optional: true
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: datasource
+              mountPath: /etc/grafana/provisioning/datasources/prometheus.yml
+              subPath: prometheus.yml
+              readOnly: true
+            - name: provider
+              mountPath: /etc/grafana/provisioning/dashboards/bookly.yml
+              subPath: bookly.yml
+              readOnly: true
+            - name: dashboard
+              mountPath: /var/lib/grafana/dashboards/bookly-overview.json
+              subPath: bookly-overview.json
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: datasource
+          configMap:
+            name: bookly-grafana-datasource
+        - name: provider
+          configMap:
+            name: bookly-grafana-dashboard-provider
+        - name: dashboard
+          configMap:
+            name: bookly-grafana-dashboard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookly-grafana
+  namespace: bookly
+  labels:
+    app.kubernetes.io/name: bookly-grafana
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: bookly-grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

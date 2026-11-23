@@ -125,6 +125,7 @@ public class CreateBookingService {
         // Validaciones existentes.
         validateTimeRange(startTime, endTime);
         validateFutureTime(startTime);
+        validateServiceDuration(serviceId, startTime, endTime);
 
         validateWithinProfessionalSchedule(
                 professionalId,
@@ -303,6 +304,26 @@ public class CreateBookingService {
                     "startTime debe ser antes que endTime"
             );
         }
+    }
+
+    // #219: la disponibilidad ofrece huecos del largo del servicio; una reserva más corta o más larga
+    // liberaría o tomaría tiempo que no corresponde al servicio contratado.
+    private void validateServiceDuration(
+            UUID serviceId,
+            LocalDateTime startTime,
+            LocalDateTime endTime
+    ) {
+        if (serviceOfferingRepository == null) {
+            return;
+        }
+        serviceOfferingRepository.findById(serviceId).ifPresent(service -> {
+            long minutes = java.time.Duration.between(startTime, endTime).toMinutes();
+            if (minutes != service.getDurationMinutes()) {
+                throw new IllegalArgumentException(
+                        "La reserva debe durar " + service.getDurationMinutes()
+                                + " minutos, igual que el servicio");
+            }
+        });
     }
 
     private void validateFutureTime(

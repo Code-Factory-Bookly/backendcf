@@ -764,26 +764,45 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
         '403': { $ref: '#/components/responses/ForbiddenError' }
-  /reservas/profesional/{professionalId}:
-    parameters:
-      - name: professionalId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
+  /reservas/profesional/agenda:
     get:
       tags: [Reservas]
-      summary: Obtener todas las reservas de un profesional
-      operationId: getByProfessional
+      summary: Consultar la agenda del profesional ("Mi Agenda", HU-14)
+      description: |
+        Reemplaza a `GET /reservas/profesional/{professionalId}`, que se retiró (responde 404).
+        Sin fechas devuelve la agenda de hoy en hora de Colombia (GMT-5). Las reservas canceladas
+        no se muestran. El listado va en orden cronológico y no está paginado: el rango máximo es de 31 días.
+
+        - **PROFESSIONAL:** ve siempre su propia agenda (el id sale del token); si envía `professionalId`, se ignora.
+        - **ADMIN:** no tiene agenda propia, debe enviar `professionalId` (400 si falta, 404 si el profesional no existe).
+      operationId: getProfessionalAgenda
       security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professionalId
+          in: query
+          required: false
+          description: Solo para ADMIN (obligatorio para él). El PROFESSIONAL lo ignora.
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          description: Fecha inicial inclusiva. Por defecto, hoy. Con solo `from` se consulta ese día.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          description: Fecha final inclusiva. Por defecto, igual a `from`.
+          schema: { type: string, format: date }
       responses:
         '200':
-          description: Lista de reservas del profesional
+          description: Agenda del periodo; si no hay reservas, `content` viene vacío y `message` informa que la agenda está libre.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Booking' }
+              schema: { $ref: '#/components/schemas/ProfessionalAgenda' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/UnauthorizedError' }
+        '403': { $ref: '#/components/responses/ForbiddenError' }
+        '404': { $ref: '#/components/responses/NotFoundError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -865,6 +884,26 @@ components:
         totalElements: { type: integer, format: int64, minimum: 0 }
         totalPages: { type: integer, minimum: 0 }
         message: { type: string, nullable: true }
+    ProfessionalAgenda:
+      type: object
+      required: [from, to, content]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/ProfessionalAgendaItem' }
+        message: { type: string, nullable: true }
+    ProfessionalAgendaItem:
+      type: object
+      required: [id, startTime, endTime, status]
+      properties:
+        id: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        customerName: { type: string, nullable: true }
+        serviceName: { type: string, nullable: true }
+        status: { type: string, enum: [CONFIRMADA, RESCHEDULED, COMPLETED] }
     ApiError:
       type: object
       required: [errorCode, message, details, traceId, timestamp]

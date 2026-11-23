@@ -72,6 +72,22 @@ Al cancelarse una reserva, además del correo al cliente, el profesional recibe 
 - Si el profesional no tiene correo, no se envía nada.
 - La creación y la reprogramación siguen notificando solo al cliente.
 
+## Migración para el frontend
+
+`GET /api/v1/reservas/profesional/{professionalId}` **ya no existe** y responde 404. La reemplaza `GET /api/v1/reservas/profesional/agenda`. El contrato está en [`docs/openapi.yaml`](openapi.yaml).
+
+| | Antes | Ahora |
+|---|---|---|
+| Ruta | `/reservas/profesional/{professionalId}` | `/reservas/profesional/agenda` |
+| Quién | El propio profesional o `ADMIN` | `PROFESSIONAL` (la suya) o `ADMIN` con `?professionalId=` |
+| Respuesta | Lista plana de reservas | Objeto `{ from, to, content[], message }` |
+| Canceladas | Incluidas | No se muestran |
+| Orden | Sin garantía | Cronológico por `startTime` |
+| Fechas | Sin filtro | Hoy por defecto; `?from=` y `?to=` (`yyyy-MM-dd`), máximo 31 días |
+| Cada reserva | `id, customerId, professionalId, serviceId, customerName, professionalName, serviceName, startTime, endTime, status, createdAt, updatedAt, cancelledAt, cancellationReason` | `id, startTime, endTime, customerName, serviceName, status` |
+
+Qué cambiar en el cliente: apuntar a la ruta nueva, leer la lista en `content` (no en la raíz), mostrar `message` cuando `content` esté vacío, y para el administrador enviar `professionalId`. Si necesita `customerId` o los datos de cancelación, hay que pedirlo: la agenda no los expone a propósito.
+
 ## Fuera de alcance (decidido)
 
 - Consulta de cancelaciones por usuario o por hora, y cualquier HU adicional sobre cancelaciones.
